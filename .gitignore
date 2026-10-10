@@ -1,11 +1,25 @@
+# Node.js
 node_modules/
 build/
 dist/
 coverage/
+
+# Python
 __pycache__/
-.DS_Store
-*.log
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local configuration and runtime data
 .env*
 !.env.example
-.env
 data.json
+
+# Miscellaneous
+.DS_Store
+*.log
