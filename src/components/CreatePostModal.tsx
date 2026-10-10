@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { EventItem, User } from '../types';
+import React, { useEffect, useState } from 'react';
+import { EventItem, Post, User } from '../types';
 import { createPost } from '../services/api';
 import { X, Plus, Megaphone, AlertCircle, Sparkles, MapPin, Send } from 'lucide-react';
 
@@ -8,6 +8,8 @@ interface CreatePostModalProps {
   onClose: () => void;
   currentEvent: EventItem | null;
   currentUser: User;
+  zoneId?: string | null;
+  allowedPostTypes?: Post['category'][];
   onPostCreated: () => void;
 }
 
@@ -16,6 +18,8 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   onClose,
   currentEvent,
   currentUser,
+  zoneId,
+  allowedPostTypes,
   onPostCreated
 }) => {
   const [category, setCategory] = useState<'lost_found' | 'requirement' | 'announcement' | 'qa' | 'promotion'>('requirement');
@@ -33,12 +37,33 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   const [ttlMinutes, setTtlMinutes] = useState<number>(currentEvent?.defaultTtlMinutes || 1440);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const postTypes: { id: Post['category']; label: string }[] = [
+    { id: 'requirement', label: 'Hardware / Assistance Needed' },
+    { id: 'lost_found', label: 'Lost & Found Item' },
+    { id: 'announcement', label: 'Official Announcement' },
+    { id: 'qa', label: 'Community Q&A' },
+    { id: 'promotion', label: 'Sponsored Partner / Vendor (reviewed)' }
+  ];
+  const visiblePostTypes = postTypes.filter(type =>
+    (type.id !== 'announcement' || currentUser.role === 'organizer') &&
+    (!zoneId || !allowedPostTypes || allowedPostTypes.includes(type.id))
+  );
+
+  useEffect(() => {
+    if (visiblePostTypes.length > 0 && !visiblePostTypes.some(type => type.id === category)) {
+      setCategory(visiblePostTypes[0].id);
+    }
+  }, [zoneId, allowedPostTypes, category, currentUser.role]);
 
   if (!isOpen || !currentEvent) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !content.trim()) return;
+    if (zoneId && allowedPostTypes && !allowedPostTypes.includes(category)) {
+      setErrorMessage('This post type is not allowed in the selected zone.');
+      return;
+    }
 
     let structuredData: any = undefined;
     if (category === 'lost_found') {
@@ -54,6 +79,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
         authorId: currentUser.id,
         authorName: currentUser.name,
         category,
+        zoneId: zoneId ?? null,
         title: title.trim(),
         content: content.trim(),
         structuredData,
@@ -101,13 +127,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
               onChange={(e) => setCategory(e.target.value as any)}
               className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
             >
-              <option value="requirement">Hardware / Assistance Needed</option>
-              <option value="lost_found">Lost & Found Item</option>
-              {currentUser.role === 'organizer' && (
-                <option value="announcement">Official Announcement (Organizer Only)</option>
-              )}
-              <option value="qa">Community Q&A</option>
-              <option value="promotion">Partner / Vendor Notice</option>
+              {visiblePostTypes.map(type => <option key={type.id} value={type.id}>{type.label}</option>)}
             </select>
           </div>
 

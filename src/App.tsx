@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, EventItem, Membership, Post } from './types';
+import { User, EventItem, Membership, Post, Zone } from './types';
 import { fetchCurrentUser, fetchEvents, createEvent, fetchEventDetails, joinEvent, logoutUser, AuthResponse } from './services/api';
 import { getAuthToken } from './services/auth';
 
@@ -15,6 +15,7 @@ import { EventPickerModal } from './components/EventPickerModal';
 import { ZoneSimulatorModal } from './components/ZoneSimulatorModal';
 import { CreatePostModal } from './components/CreatePostModal';
 import { PostDetailModal } from './components/PostDetailModal';
+import { ZonesView } from './components/ZonesView';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -24,6 +25,7 @@ export default function App() {
   const [membership, setMembership] = useState<Membership | undefined>(undefined);
   const [activeTab, setActiveTab] = useState<string>('feed');
   const [postRefreshKey, setPostRefreshKey] = useState(0);
+  const [activeZone, setActiveZone] = useState<Zone | null>(null);
 
   // Modals
   const [isEventPickerOpen, setIsEventPickerOpen] = useState(false);
@@ -81,10 +83,12 @@ export default function App() {
     setCurrentUser(null);
     setCurrentEvent(null);
     setMembership(undefined);
+    setActiveZone(null);
     setActiveTab('feed');
   };
 
   const handleSelectEvent = async (event: EventItem) => {
+    setActiveZone(null);
     setCurrentEvent(event);
     if (currentUser) {
       try {
@@ -112,6 +116,10 @@ export default function App() {
     }
   };
 
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+  };
+
   // Initial authentication check state
   if (!isAuthChecked) {
     return (
@@ -133,7 +141,7 @@ export default function App() {
         currentUser={currentUser}
         onLogout={handleLogout}
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={handleTabChange}
         currentEvent={currentEvent}
         onOpenEventPicker={() => setIsEventPickerOpen(true)}
         onOpenZoneSimulator={() => setIsZoneSimulatorOpen(true)}
@@ -146,6 +154,8 @@ export default function App() {
             currentEvent={currentEvent}
             currentUser={currentUser}
             refreshKey={postRefreshKey}
+            zoneId={activeZone?.id || null}
+            allowedPostTypes={activeZone?.allowedPostTypes}
             onOpenCreatePost={() => setIsCreatePostOpen(true)}
             onSelectPost={(post) => {
               setSelectedPost(post);
@@ -156,6 +166,13 @@ export default function App() {
             }}
           />
         )}
+
+        <ZonesView
+          isActive={activeTab === 'zones'}
+          currentEvent={currentEvent}
+          currentUser={currentUser}
+          onCurrentZoneChange={setActiveZone}
+        />
 
         {activeTab === 'inbox' && (
           <InboxView currentEvent={currentEvent} currentUser={currentUser} />
@@ -207,6 +224,8 @@ export default function App() {
         onClose={() => setIsCreatePostOpen(false)}
         currentEvent={currentEvent}
         currentUser={currentUser}
+        zoneId={activeZone?.id || null}
+        allowedPostTypes={activeZone?.allowedPostTypes}
         onPostCreated={() => setPostRefreshKey((key) => key + 1)}
       />
 

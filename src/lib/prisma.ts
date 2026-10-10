@@ -274,6 +274,10 @@ export const prisma = {
           updates.push(`"zoneState" = $${pIndex++}`);
           params.push(args.data.zoneState);
         }
+        if (args.data.lastKnownZoneId !== undefined) {
+          updates.push(`"lastKnownZoneId" = $${pIndex++}`);
+          params.push(args.data.lastKnownZoneId);
+        }
         if (args.data.role !== undefined) {
           updates.push(`role = $${pIndex++}`);
           params.push(args.data.role);
@@ -386,6 +390,10 @@ export const prisma = {
           sql += ` AND category = $${pIndex++}`;
           params.push(args.where.category);
         }
+        if (args?.where?.zoneId) {
+          sql += ` AND "zoneId" = $${pIndex++}`;
+          params.push(args.where.zoneId);
+        }
         if (args?.where?.OR && Array.isArray(args.where.OR)) {
           const orClauses: string[] = [];
           for (const clause of args.where.OR) {
@@ -436,8 +444,8 @@ export const prisma = {
           : (args.data.structuredData || null);
 
         const res = await query(
-          `INSERT INTO "Post" (id, "eventId", "authorId", "authorName", category, title, content, "structuredData", "approxLocation", audience, "teamId", status, "expiresAt", "reportCount", "createdAt", "updatedAt")
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 0, NOW(), NOW()) RETURNING *`,
+          `INSERT INTO "Post" (id, "eventId", "authorId", "authorName", category, title, content, "structuredData", "approxLocation", audience, "teamId", "zoneId", status, "expiresAt", "reportCount", "createdAt", "updatedAt")
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 0, NOW(), NOW()) RETURNING *`,
           [
             id,
             args.data.eventId,
@@ -450,6 +458,7 @@ export const prisma = {
             args.data.approxLocation || null,
             args.data.audience || 'all',
             args.data.teamId || null,
+            args.data.zoneId || null,
             args.data.status || 'active',
             args.data.expiresAt
           ]

@@ -364,7 +364,7 @@ async function runAudit() {
       name: 'Supabase Security & Row Level Security (RLS)',
       category: '4. Supabase Security',
       status: 'PASS',
-      detail: 'RLS is enabled across all 8 tables in public schema; zero database credentials exposed to client bundle.'
+      detail: `RLS is enabled across all ${rlsRes.rows.length} tables in public schema; zero database credentials exposed to client bundle.`
     });
   } catch (err: any) {
     results.push({
@@ -380,7 +380,7 @@ async function runAudit() {
     const insideRes = await fetch('http://localhost:3000/api/events/evt-samartha-2026/verify-zone', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${partToken}` },
-      body: JSON.stringify({ latitude: 28.5451, longitude: 77.1927 })
+      body: JSON.stringify({ latitude: 17.6869, longitude: 83.2186 })
     });
     const insideData = await insideRes.json();
     assert(insideData.isEligible === true && insideData.zoneState === 'eligible', 'Inside zone check failed');

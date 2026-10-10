@@ -30,6 +30,12 @@ def npm_command(arguments):
 def choose_port(requested_port):
     if requested_port:
         with socket.socket() as probe:
+            probe.settimeout(0.25)
+            if probe.connect_ex(("127.0.0.1", requested_port)) == 0:
+                requested_port = None
+
+    if requested_port:
+        with socket.socket() as probe:
             try:
                 probe.bind(("127.0.0.1", requested_port))
                 return requested_port

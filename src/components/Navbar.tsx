@@ -27,6 +27,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const navItems = [
     { id: 'feed', label: 'Feed' },
+    { id: 'zones', label: 'Map & Zones' },
     { id: 'inbox', label: 'Channels' },
     { id: 'notifications', label: 'Alerts' },
     ...((currentUser.role === 'organizer' || currentUser.role === 'moderator')

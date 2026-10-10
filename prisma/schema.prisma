@@ -17,6 +17,8 @@ model User {
   avatar        String?
   memberships   Membership[]
   notifications Notification[]
+  zoneJoins     ZoneJoin[]
+  createdZones  Zone[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
@@ -41,6 +43,8 @@ model Event {
   messages         Message[]
   reports          Report[]
   notifications    Notification[]
+  zones            Zone[]
+  zoneJoins        ZoneJoin[]
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 }
@@ -57,6 +61,7 @@ model Membership {
   role           String   @default("participant") // participant | organizer | moderator | owner
   status         String   @default("active") // active | pending | suspended
   zoneState      String   @default("demo_zone") // checking | eligible | outside_zone | permission_denied | demo_zone
+  lastKnownZoneId String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -79,6 +84,41 @@ model Team {
   @@index([eventId])
 }
 
+model Zone {
+  id               String     @id @default(uuid())
+  eventId          String
+  event            Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name             String
+  description      String
+  geometry         Json
+  radiusMeters     Int?
+  ttlSeconds       Int        @default(86400)
+  allowedPostTypes Json
+  createdBy        String
+  creator          User       @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  expiresAt        DateTime
+  posts            Post[]
+  joins            ZoneJoin[]
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@index([eventId])
+  @@index([expiresAt])
+}
+
+model ZoneJoin {
+  zoneId   String
+  zone     Zone     @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventId  String
+  event    Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  joinedAt DateTime @default(now())
+
+  @@id([zoneId, userId])
+  @@index([eventId, userId])
+}
+
 model Post {
   id             String   @id @default(uuid())
   eventId        String
@@ -93,6 +133,8 @@ model Post {
   audience       String   @default("all") // all | team | organizers
   teamId         String?
   team           Team?    @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  zoneId         String?
+  zone           Zone?    @relation(fields: [zoneId], references: [id], onDelete: SetNull)
   status         String   @default("active") // active | resolved | expired | pending_review
   expiresAt      DateTime
   reportCount    Int      @default(0)
@@ -103,6 +145,7 @@ model Post {
   @@index([category])
   @@index([status])
   @@index([expiresAt])
+  @@index([zoneId])
 }
 
 model Message {

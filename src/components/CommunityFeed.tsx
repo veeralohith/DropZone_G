@@ -7,6 +7,8 @@ interface CommunityFeedProps {
   currentEvent: EventItem | null;
   currentUser: User;
   refreshKey: number;
+  zoneId?: string | null;
+  allowedPostTypes?: Post['category'][];
   onOpenCreatePost: () => void;
   onSelectPost: (post: Post) => void;
   onOpenInboxWithMessage?: (authorId: string, authorName: string) => void;
@@ -16,6 +18,8 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
   currentEvent,
   currentUser,
   refreshKey,
+  zoneId,
+  allowedPostTypes,
   onOpenCreatePost,
   onSelectPost,
   onOpenInboxWithMessage
@@ -56,13 +60,19 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
     if (currentEvent) {
       loadPosts();
     }
-  }, [currentEvent, selectedCategory, refreshKey]);
+  }, [currentEvent, selectedCategory, refreshKey, zoneId]);
+
+  useEffect(() => {
+    if (zoneId && allowedPostTypes?.length && !allowedPostTypes.includes(composerCategory)) {
+      setComposerCategory(allowedPostTypes[0]);
+    }
+  }, [zoneId, allowedPostTypes, composerCategory]);
 
   const loadPosts = async () => {
     if (!currentEvent) return;
     setLoading(true);
     try {
-      const data = await fetchPosts(currentEvent.id, selectedCategory, searchQuery);
+      const data = await fetchPosts(currentEvent.id, selectedCategory, searchQuery, zoneId);
       setPosts(data);
     } catch (err) {
       console.error('Failed to load posts:', err);
@@ -93,6 +103,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
         authorId: currentUser.id,
         authorName: currentUser.name,
         category: composerCategory,
+        zoneId: zoneId || null,
         title: composerTitle.trim(),
         content: composerContent.trim(),
         structuredData,
@@ -184,11 +195,12 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
     const diffMs = new Date(expiresAt).getTime() - Date.now();
     if (diffMs <= 0) return 'Expired';
     const hours = Math.floor(diffMs / (1000 * 60 * 60));
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / 60000);
     if (hours > 24) {
       const days = Math.floor(hours / 24);
-      return `Expires in ${days}d`;
+      return `Expires in ${days}d ${hours % 24}h`;
     }
-    return `Expires in ${hours}h`;
+    return `Expires in ${hours}h ${minutes}m`;
   };
 
   const formatTimeAgo = (createdAt: string) => {
@@ -211,6 +223,8 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
         return { label: 'Lost & Found', color: 'text-amber-700 bg-amber-50 border-amber-200/60' };
       case 'qa':
         return { label: 'Q&A & Help', color: 'text-purple-700 bg-purple-50 border-purple-200/60' };
+      case 'promotion':
+        return { label: 'Sponsored · Reviewed', color: 'text-amber-800 bg-amber-50 border-amber-200/60' };
       default:
         return { label: 'General', color: 'text-slate-700 bg-slate-50 border-slate-200/60' };
     }
@@ -280,7 +294,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
           <form onSubmit={handleQuickPostSubmit} className="p-4 sm:p-5 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                <span>Broadcast to Verified Event Attendees</span>
+                <span>{zoneId ? 'Broadcast to this zone' : 'Broadcast to Verified Event Attendees'}</span>
               </div>
               <button
                 type="button"
@@ -297,8 +311,9 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
                 { id: 'requirement', label: 'Hardware & Needs' },
                 { id: 'lost_found', label: 'Lost & Found' },
                 { id: 'qa', label: 'Q&A & Help' },
-                { id: 'announcement', label: 'Announcement' }
-              ].map((c) => (
+                { id: 'announcement', label: 'Announcement' },
+                { id: 'promotion', label: 'Sponsored (reviewed)' }
+              ].filter(c => !zoneId || !allowedPostTypes || allowedPostTypes.includes(c.id as Post['category'])).map((c) => (
                 <button
                   key={c.id}
                   type="button"

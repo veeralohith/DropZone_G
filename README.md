@@ -20,3 +20,9 @@ View your app in AI Studio: https://ai.studio/apps/3e5c7389-29d5-4fb0-8a16-bfed2
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+## Map Zones
+
+Before using Map & Zones with Supabase, apply [`migrations/sql/001_zones.sql`](migrations/sql/001_zones.sql) in the Supabase SQL Editor. It creates zone and join tables, adds zone links to posts, and keeps row-level security enabled. The local map uses OpenStreetMap tiles.
+
+See [PRIVACY.md](PRIVACY.md) for location collection, retention, and deletion notes.

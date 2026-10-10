@@ -37,16 +37,16 @@ async function main() {
     const zoneConfig = JSON.stringify({
       enabled: true,
       radiusMeters: 500,
-      centerName: 'IIT Delhi Innovation Pavilion Zone A',
-      latitude: 28.5450,
-      longitude: 77.1926
+      centerName: 'SAMARTHA Hackathon, Visakhapatnam',
+      latitude: 17.6868,
+      longitude: 83.2185
     });
 
     await pool.query(`
       INSERT INTO "Event" (id, name, description, "eventType", "startDate", "endDate", timezone, "accessMode", "zoneConfig", "teamPolicy", "defaultTtlMinutes", "ownerId", status, "createdAt", "updatedAt")
       VALUES
-        ('evt-samartha-2026', 'SAMARTHA National Hackathon 2026', 'Zone-based collaborative problem solving, rapid prototyping, and community coordination for resilient smart campuses.', 'hybrid', '2026-10-15T09:00:00Z', '2026-10-17T18:00:00Z', 'Asia/Kolkata', 'csv_verified', $1::jsonb, 'optional', 1440, 'usr-2', 'active', NOW(), NOW())
-      ON CONFLICT (id) DO NOTHING;
+        ('evt-samartha-2026', 'SAMARTHA National Hackathon 2026', 'Zone-based collaboration for SAMARTHA National Hackathon in Visakhapatnam, Andhra Pradesh.', 'hybrid', '2026-10-15T09:00:00Z', '2026-10-17T18:00:00Z', 'Asia/Kolkata', 'csv_verified', $1::jsonb, 'optional', 1440, 'usr-2', 'active', NOW(), NOW())
+      ON CONFLICT (id) DO UPDATE SET description = EXCLUDED.description, "zoneConfig" = EXCLUDED."zoneConfig", "updatedAt" = NOW();
     `, [zoneConfig]);
     console.log('✓ Event seeded');
 

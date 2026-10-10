@@ -28,6 +28,32 @@ export interface EventItem {
   status: 'active' | 'archived';
 }
 
+export interface GeoJsonPoint {
+  type: 'Point';
+  coordinates: [number, number];
+}
+
+export interface GeoJsonPolygon {
+  type: 'Polygon';
+  coordinates: [number, number][][];
+}
+
+export interface Zone {
+  id: string;
+  eventId: string;
+  name: string;
+  description: string;
+  geometry: GeoJsonPoint | GeoJsonPolygon;
+  radiusMeters: number | null;
+  ttlSeconds: number;
+  allowedPostTypes: Post['category'][];
+  createdBy: string;
+  expiresAt: string;
+  createdAt: string;
+  memberCount: number;
+  joined: boolean;
+}
+
 export interface Membership {
   id: string;
   eventId: string;
@@ -51,6 +77,7 @@ export interface Team {
 export interface Post {
   id: string;
   eventId: string;
+  zoneId?: string | null;
   authorId: string;
   authorName: string;
   category: 'lost_found' | 'requirement' | 'announcement' | 'qa' | 'promotion';

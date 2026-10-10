@@ -136,7 +136,7 @@ async function seedDevelopmentDemoAccounts() {
       data: {
         id: eventId,
         name: 'SAMARTHA National Hackathon 2026',
-        description: 'Zone-based collaboration for the SAMARTHA National Hackathon.',
+        description: 'Zone-based collaboration for SAMARTHA National Hackathon in Visakhapatnam, Andhra Pradesh.',
         eventType: 'hybrid',
         startDate: '2026-10-15T09:00:00.000Z',
         endDate: '2026-10-17T18:00:00.000Z',
@@ -145,14 +145,28 @@ async function seedDevelopmentDemoAccounts() {
         zoneConfig: {
           enabled: true,
           radiusMeters: 500,
-          centerName: 'IIT Delhi Innovation Pavilion Zone A',
-          latitude: 28.545,
-          longitude: 77.1926
+          centerName: 'SAMARTHA Hackathon, Visakhapatnam',
+          latitude: 17.6868,
+          longitude: 83.2185
         },
         teamPolicy: 'optional',
         defaultTtlMinutes: 1440,
         ownerId: 'usr-2',
         status: 'active'
+      }
+    });
+  } else {
+    await dbStore.events.update({
+      where: { id: eventId },
+      data: {
+        description: 'Zone-based collaboration for SAMARTHA National Hackathon in Visakhapatnam, Andhra Pradesh.',
+        zoneConfig: {
+          enabled: true,
+          radiusMeters: 500,
+          centerName: 'SAMARTHA Hackathon, Visakhapatnam',
+          latitude: 17.6868,
+          longitude: 83.2185
+        }
       }
     });
   }
@@ -187,6 +201,54 @@ function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2:
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
+}
+
+function isCoordinatePair(value: any): value is [number, number] {
+  return Array.isArray(value) && value.length >= 2 && Number.isFinite(value[0]) && Number.isFinite(value[1]) &&
+    value[0] >= -180 && value[0] <= 180 && value[1] >= -90 && value[1] <= 90;
+}
+
+function isValidZoneGeometry(geometry: any): boolean {
+  if (!geometry || typeof geometry !== 'object') return false;
+  if (geometry.type === 'Point') return isCoordinatePair(geometry.coordinates);
+  if (geometry.type !== 'Polygon' || !Array.isArray(geometry.coordinates) || geometry.coordinates.length === 0) return false;
+  return geometry.coordinates.every((ring: any) =>
+    Array.isArray(ring) && ring.length >= 4 && ring.every(isCoordinatePair) &&
+    ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1]
+  );
+}
+
+function pointInRing(longitude: number, latitude: number, ring: [number, number][]): boolean {
+  let inside = false;
+  for (let index = 0, previous = ring.length - 1; index < ring.length; previous = index++) {
+    const [x1, y1] = ring[index];
+    const [x2, y2] = ring[previous];
+    const crosses = (y1 > latitude) !== (y2 > latitude) &&
+      longitude < ((x2 - x1) * (latitude - y1)) / (y2 - y1) + x1;
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+
+function pointInZone(longitude: number, latitude: number, zone: any): boolean {
+  const geometry = typeof zone.geometry === 'string' ? JSON.parse(zone.geometry) : zone.geometry;
+  if (geometry?.type === 'Point' && isCoordinatePair(geometry.coordinates)) {
+    const [centerLongitude, centerLatitude] = geometry.coordinates;
+    return calculateDistanceMeters(latitude, longitude, centerLatitude, centerLongitude) <= Number(zone.radiusMeters || 0);
+  }
+  if (geometry?.type === 'Polygon' && Array.isArray(geometry.coordinates)) {
+    const [outerRing, ...holes] = geometry.coordinates;
+    return pointInRing(longitude, latitude, outerRing) && !holes.some((ring: [number, number][]) => pointInRing(longitude, latitude, ring));
+  }
+  return false;
+}
+
+function parseZoneJson(zone: any) {
+  return {
+    ...zone,
+    geometry: typeof zone.geometry === 'string' ? JSON.parse(zone.geometry) : zone.geometry,
+    allowedPostTypes: typeof zone.allowedPostTypes === 'string' ? JSON.parse(zone.allowedPostTypes) : zone.allowedPostTypes
+  };
 }
 
 // Authenticated Request Interface
@@ -791,6 +853,188 @@ async function startServer() {
     }
   });
 
+  app.get('/api/events/:eventId/zones', requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { eventId } = req.params;
+      await pool.query(`DELETE FROM "Zone" WHERE "expiresAt" <= NOW() - INTERVAL '30 days'`);
+      const result = await pool.query(
+        `SELECT z.*, COUNT(DISTINCT j."userId")::int AS "memberCount",
+                COALESCE(BOOL_OR(j."userId" = $2), false) AS joined
+         FROM "Zone" z
+         LEFT JOIN "ZoneJoin" j ON j."zoneId" = z.id
+         WHERE z."eventId" = $1
+         GROUP BY z.id
+         ORDER BY z."createdAt" DESC`,
+        [eventId, req.user.id]
+      );
+      return res.json(result.rows.map((zone: any) => ({ ...parseZoneJson(zone), memberCount: Number(zone.memberCount), joined: Boolean(zone.joined) })));
+    } catch {
+      try {
+        await dbStore.zones.cleanupExpired();
+        const zones = await dbStore.zones.findMany({ where: { eventId: req.params.eventId } });
+        const currentUserJoins = await dbStore.zoneJoins.findMany({ where: { eventId: req.params.eventId, userId: req.user.id } });
+        const joinedIds = new Set(currentUserJoins.map((join: any) => join.zoneId));
+        const enriched = await Promise.all(zones.map(async (zone: any) => ({
+          ...parseZoneJson(zone),
+          memberCount: (await dbStore.zoneJoins.findMany({ where: { zoneId: zone.id } })).length,
+          joined: joinedIds.has(zone.id)
+        })));
+        return res.json(enriched);
+      } catch {
+        return res.status(500).json({ error: 'Could not load event zones.' });
+      }
+    }
+  });
+
+  app.post('/api/events/:eventId/zones', requireAuth, rateLimiter(20), async (req: AuthenticatedRequest, res) => {
+    try {
+      const { eventId } = req.params;
+      const { name, description, geometry, radiusMeters, ttlSeconds, allowedPostTypes } = req.body;
+      const membership = await prisma.membership.findUnique({
+        where: { eventId_userId: { eventId, userId: req.user.id } }
+      });
+      const canCreate = ['organizer', 'moderator', 'owner'].includes(req.user.role) ||
+        ['organizer', 'moderator', 'owner'].includes(membership?.role || '');
+      if (!canCreate) return res.status(403).json({ error: 'Only event organizers and moderators can create zones.' });
+      if (typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'Zone name is required.' });
+      if (typeof description !== 'string') return res.status(400).json({ error: 'Zone description is required.' });
+      if (!isValidZoneGeometry(geometry)) return res.status(400).json({ error: 'Provide a valid GeoJSON Point or Polygon.' });
+      if (geometry.type === 'Point' && (!Number.isInteger(radiusMeters) || radiusMeters < 50 || radiusMeters > 500)) {
+        return res.status(400).json({ error: 'Circle radius must be between 50m and 500m.' });
+      }
+      const allowedTtls = [7200, 86400, 604800];
+      if (!allowedTtls.includes(Number(ttlSeconds))) return res.status(400).json({ error: 'Choose a zone lifetime of 2 hours, 24 hours, or 7 days.' });
+      const allowedCategories = ['lost_found', 'requirement', 'announcement', 'qa', 'promotion'];
+      if (!Array.isArray(allowedPostTypes) || allowedPostTypes.length === 0 ||
+        allowedPostTypes.some((category: string) => !allowedCategories.includes(category))) {
+        return res.status(400).json({ error: 'Select one or more valid post types.' });
+      }
+
+      const data = {
+        id: `zone-${crypto.randomUUID()}`,
+        eventId,
+        name: name.trim().slice(0, 100),
+        description: description.trim().slice(0, 500),
+        geometry,
+        radiusMeters: geometry.type === 'Point' ? radiusMeters : null,
+        ttlSeconds: Number(ttlSeconds),
+        allowedPostTypes,
+        createdBy: req.user.id,
+        expiresAt: new Date(Date.now() + Number(ttlSeconds) * 1000).toISOString()
+      };
+      let zone;
+      try {
+        const result = await pool.query(
+          `INSERT INTO "Zone" (id, "eventId", name, description, geometry, "radiusMeters", "ttlSeconds", "allowedPostTypes", "createdBy", "expiresAt")
+           VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8::jsonb, $9, $10) RETURNING *`,
+          [data.id, data.eventId, data.name, data.description, JSON.stringify(data.geometry), data.radiusMeters, data.ttlSeconds, JSON.stringify(data.allowedPostTypes), data.createdBy, data.expiresAt]
+        );
+        zone = result.rows[0];
+      } catch {
+        zone = await dbStore.zones.create({ data });
+      }
+      return res.status(201).json({ ...parseZoneJson(zone), memberCount: 0, joined: false });
+    } catch (err: any) {
+      console.error('Zone creation error:', err);
+      return res.status(500).json({ error: 'Could not create zone.' });
+    }
+  });
+
+  app.post('/api/events/:eventId/zones/:zoneId/join', requireAuth, rateLimiter(40), async (req: AuthenticatedRequest, res) => {
+    try {
+      const { eventId, zoneId } = req.params;
+      let zone;
+      try {
+        const result = await pool.query('SELECT * FROM "Zone" WHERE id = $1 AND "eventId" = $2 AND "expiresAt" > NOW()', [zoneId, eventId]);
+        zone = result.rows[0] || null;
+      } catch {
+        zone = await dbStore.zones.findUnique({ where: { id: zoneId } });
+        if (zone?.eventId !== eventId || new Date(zone.expiresAt).getTime() <= Date.now()) zone = null;
+      }
+      if (!zone) return res.status(404).json({ error: 'This zone is no longer active.' });
+
+      let joinedAt: string;
+      try {
+        const result = await pool.query(
+          `INSERT INTO "ZoneJoin" ("zoneId", "userId", "eventId") VALUES ($1, $2, $3)
+           ON CONFLICT ("zoneId", "userId") DO UPDATE SET "zoneId" = EXCLUDED."zoneId" RETURNING "joinedAt"`,
+          [zoneId, req.user.id, eventId]
+        );
+        joinedAt = result.rows[0].joinedAt;
+      } catch {
+        const join = await dbStore.zoneJoins.upsert({
+          where: { zoneId_userId: { zoneId, userId: req.user.id } },
+          create: { zoneId, userId: req.user.id, eventId }
+        });
+        joinedAt = join.joinedAt;
+      }
+      return res.json({ success: true, joinedAt });
+    } catch (err: any) {
+      console.error('Zone join error:', err);
+      return res.status(500).json({ error: 'Could not join this zone.' });
+    }
+  });
+
+  app.delete('/api/events/:eventId/zones/:zoneId/join', requireAuth, rateLimiter(40), async (req: AuthenticatedRequest, res) => {
+    try {
+      const { eventId, zoneId } = req.params;
+      try {
+        await pool.query('DELETE FROM "ZoneJoin" WHERE "zoneId" = $1 AND "userId" = $2 AND "eventId" = $3', [zoneId, req.user.id, eventId]);
+      } catch {
+        await dbStore.zoneJoins.delete({ where: { zoneId_userId: { zoneId, userId: req.user.id } } });
+      }
+      const membership = await prisma.membership.findUnique({
+        where: { eventId_userId: { eventId, userId: req.user.id } }
+      });
+      if (membership?.lastKnownZoneId === zoneId) {
+        await prisma.membership.update({ where: { id: membership.id }, data: { lastKnownZoneId: null } });
+      }
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error('Zone leave error:', err);
+      return res.status(500).json({ error: 'Could not leave this zone.' });
+    }
+  });
+
+  app.post('/api/events/:eventId/zones/locate', requireAuth, rateLimiter(60), async (req: AuthenticatedRequest, res) => {
+    try {
+      const { latitude, longitude, simulated } = req.body;
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+        return res.status(400).json({ error: 'A valid coarse location is required.' });
+      }
+      const coarseLatitude = Math.round(latitude * 1000) / 1000;
+      const coarseLongitude = Math.round(longitude * 1000) / 1000;
+      let zones: any[];
+      try {
+        const result = await pool.query('SELECT * FROM "Zone" WHERE "eventId" = $1 AND "expiresAt" > NOW()', [req.params.eventId]);
+        zones = result.rows;
+      } catch {
+        zones = (await dbStore.zones.findMany({ where: { eventId: req.params.eventId } }))
+          .filter((zone: any) => new Date(zone.expiresAt).getTime() > Date.now());
+      }
+      const activeZone = zones.find(zone => pointInZone(coarseLongitude, coarseLatitude, zone));
+      const simulatedInDevelopment = process.env.NODE_ENV !== 'production' && simulated === true;
+
+      const membership = await prisma.membership.findUnique({
+        where: { eventId_userId: { eventId: req.params.eventId, userId: req.user.id } }
+      });
+      if (membership) {
+        await prisma.membership.update({
+          where: { id: membership.id },
+          data: { lastKnownZoneId: activeZone?.id || null, zoneState: activeZone ? 'eligible' : 'outside_zone' }
+        });
+      }
+      return res.json({
+        zoneId: activeZone?.id || null,
+        zoneName: activeZone?.name || null,
+        simulated: simulatedInDevelopment
+      });
+    } catch (err: any) {
+      console.error('Zone locate error:', err);
+      return res.status(500).json({ error: 'Could not verify zone entry.' });
+    }
+  });
+
   // Get posts for event
   app.get('/api/events/:eventId/posts', requireAuth, async (req, res) => {
     try {
@@ -800,6 +1044,8 @@ async function startServer() {
         status: 'active',
         includeExpired: includeExpired === 'true'
       };
+
+      if (typeof req.query.zoneId === 'string' && req.query.zoneId) where.zoneId = req.query.zoneId;
 
       if (category && category !== 'all') {
         where.category = category;
@@ -830,7 +1076,7 @@ async function startServer() {
   app.post('/api/events/:eventId/posts', requireAuth, rateLimiter(40), async (req: AuthenticatedRequest, res) => {
     try {
       const { eventId } = req.params;
-      const { category, title, content, structuredData, approxLocation, audience, teamId, ttlMinutes } = req.body;
+      const { category, title, content, structuredData, approxLocation, audience, teamId, ttlMinutes, zoneId } = req.body;
 
       if (!title || title.trim().length === 0) {
         return res.status(400).json({ error: 'Post title is required' });
@@ -838,16 +1084,60 @@ async function startServer() {
       if (!content || content.trim().length === 0) {
         return res.status(400).json({ error: 'Post content is required' });
       }
+      const publicText = [title, content, approxLocation].filter((value): value is string => typeof value === 'string').join(' ');
+      const preciseCoordinatePair = /(?:^|\D)(-?\d{1,3}\.\d{4,})\s*[,; ]\s*(-?\d{1,3}\.\d{4,})(?:\D|$)/;
+      if (preciseCoordinatePair.test(publicText)) {
+        return res.status(400).json({ error: 'Do not include precise coordinates in public posts. Use an approximate venue description.' });
+      }
+      if (category === 'announcement' && req.user.role !== 'organizer') {
+        const membership = await prisma.membership.findUnique({
+          where: { eventId_userId: { eventId, userId: req.user.id } }
+        });
+        if (!['organizer', 'owner'].includes(membership?.role || '')) {
+          return res.status(403).json({ error: 'Only event organizers can publish announcements.' });
+        }
+      }
 
       // Security: author is strictly derived from authenticated caller token
       const authorId = req.user.id;
       const authorName = req.user.name;
 
       const ttl = ttlMinutes ? Math.max(1, Math.min(parseInt(ttlMinutes, 10), 10080)) : 1440;
-      const expiresAt = new Date(Date.now() + ttl * 60000).toISOString();
+      let expiresAt = new Date(Date.now() + ttl * 60000).toISOString();
 
       const isAnnouncement = category === 'announcement';
       const status = isAnnouncement ? 'active' : (category === 'promotion' ? 'pending_review' : 'active');
+
+      if (zoneId) {
+        let zone;
+        try {
+          const result = await pool.query('SELECT * FROM "Zone" WHERE id = $1 AND "eventId" = $2 AND "expiresAt" > NOW()', [zoneId, eventId]);
+          zone = result.rows[0] || null;
+        } catch {
+          zone = await dbStore.zones.findUnique({ where: { id: zoneId } });
+          if (zone?.eventId !== eventId || new Date(zone.expiresAt).getTime() <= Date.now()) zone = null;
+        }
+        if (!zone) return res.status(400).json({ error: 'This zone has expired or is unavailable.' });
+        const parsedZone = parseZoneJson(zone);
+        if (!parsedZone.allowedPostTypes.includes(category)) {
+          return res.status(400).json({ error: 'This post type is not allowed in the selected zone.' });
+        }
+        const membership = await prisma.membership.findUnique({
+          where: { eventId_userId: { eventId, userId: req.user.id } }
+        });
+        let hasJoined = false;
+        try {
+          const joined = await pool.query('SELECT 1 FROM "ZoneJoin" WHERE "zoneId" = $1 AND "userId" = $2', [zoneId, req.user.id]);
+          hasJoined = joined.rowCount > 0;
+        } catch {
+          hasJoined = (await dbStore.zoneJoins.findMany({ where: { zoneId, userId: req.user.id } })).length > 0;
+        }
+        if (!hasJoined && membership?.lastKnownZoneId !== zoneId) {
+          return res.status(403).json({ error: 'Join the zone or enable location while inside it before posting.' });
+        }
+        const zoneExpiry = new Date(zone.expiresAt).getTime();
+        expiresAt = new Date(Math.min(new Date(expiresAt).getTime(), zoneExpiry)).toISOString();
+      }
 
       const newPost = await prisma.post.create({
         data: {
@@ -861,6 +1151,7 @@ async function startServer() {
           approxLocation: approxLocation ? approxLocation.trim().slice(0, 100) : null,
           audience: audience || 'all',
           teamId,
+          zoneId: zoneId || null,
           status,
           expiresAt,
           reportCount: 0

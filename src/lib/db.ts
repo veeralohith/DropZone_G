@@ -14,6 +14,8 @@ interface DbSchema {
   messages: any[];
   reports: any[];
   notifications: any[];
+  zones: any[];
+  zoneJoins: any[];
 }
 
 const defaultData: DbSchema = {
@@ -24,7 +26,9 @@ const defaultData: DbSchema = {
   posts: [],
   messages: [],
   reports: [],
-  notifications: []
+  notifications: [],
+  zones: [],
+  zoneJoins: []
 };
 
 function readDb(): DbSchema {
@@ -34,7 +38,7 @@ function readDb(): DbSchema {
       return defaultData;
     }
     const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-    return JSON.parse(raw);
+    return { ...defaultData, ...JSON.parse(raw) };
   } catch (err) {
     console.error('Error reading DB:', err);
     return defaultData;
@@ -102,6 +106,14 @@ const eventsRepo = {
     db.events.push(newEvt);
     writeDb(db);
     return newEvt;
+  },
+  async update(args?: { where?: { id: string }; data: any }) {
+    const db = readDb();
+    const eventIndex = db.events.findIndex(event => event.id === args?.where?.id);
+    if (eventIndex < 0) return null;
+    db.events[eventIndex] = { ...db.events[eventIndex], ...args?.data, updatedAt: new Date().toISOString() };
+    writeDb(db);
+    return db.events[eventIndex];
   }
 };
 
@@ -223,6 +235,10 @@ const postsRepo = {
     if (where?.eventId) list = list.filter(p => p.eventId === where.eventId);
     if (where?.status) list = list.filter(p => p.status === where.status);
     if (where?.category) list = list.filter(p => p.category === where.category);
+    if (where?.zoneId) list = list.filter(p => p.zoneId === where.zoneId);
+    if (where?.status === 'active' && !where.includeExpired) {
+      list = list.filter(p => !p.expiresAt || new Date(p.expiresAt).getTime() > Date.now());
+    }
     if (where?.OR) {
       list = list.filter(p => {
         return where.OR.some((cond: any) => {
@@ -260,6 +276,64 @@ const postsRepo = {
       return db.posts[idx];
     }
     return null;
+  }
+};
+
+const zonesRepo = {
+  async findMany(args?: { where?: { eventId?: string } }) {
+    const db = readDb();
+    return db.zones.filter(zone => !args?.where?.eventId || zone.eventId === args.where.eventId);
+  },
+  async findUnique(args?: { where?: { id: string } }) {
+    return readDb().zones.find(zone => zone.id === args?.where?.id) || null;
+  },
+  async create(args?: { data: any }) {
+    const db = readDb();
+    const zone = { id: `zone-${Date.now()}`, createdAt: new Date().toISOString(), ...args?.data };
+    db.zones.unshift(zone);
+    writeDb(db);
+    return zone;
+  },
+  async cleanupExpired(graceMs = 30 * 24 * 60 * 60 * 1000) {
+    const db = readDb();
+    const cutoff = Date.now() - graceMs;
+    const expiredIds = new Set(db.zones.filter(zone => new Date(zone.expiresAt).getTime() <= cutoff).map(zone => zone.id));
+    if (expiredIds.size === 0) return 0;
+    const oldLength = db.zones.length;
+    db.zones = db.zones.filter(zone => !expiredIds.has(zone.id));
+    db.zoneJoins = db.zoneJoins.filter(join => !expiredIds.has(join.zoneId));
+    db.posts = db.posts.map(post => expiredIds.has(post.zoneId) ? { ...post, zoneId: null } : post);
+    writeDb(db);
+    return oldLength - db.zones.length;
+  }
+};
+
+const zoneJoinsRepo = {
+  async findMany(args?: { where?: { zoneId?: string; userId?: string; eventId?: string } }) {
+    const db = readDb();
+    return db.zoneJoins.filter(join =>
+      (!args?.where?.zoneId || join.zoneId === args.where.zoneId) &&
+      (!args?.where?.userId || join.userId === args.where.userId) &&
+      (!args?.where?.eventId || join.eventId === args.where.eventId)
+    );
+  },
+  async upsert(args: { where: { zoneId_userId: { zoneId: string; userId: string } }; create: any }) {
+    const db = readDb();
+    const { zoneId, userId } = args.where.zoneId_userId;
+    const existing = db.zoneJoins.find(join => join.zoneId === zoneId && join.userId === userId);
+    if (existing) return existing;
+    const join = { joinedAt: new Date().toISOString(), ...args.create };
+    db.zoneJoins.push(join);
+    writeDb(db);
+    return join;
+  },
+  async delete(args: { where: { zoneId_userId: { zoneId: string; userId: string } } }) {
+    const db = readDb();
+    const { zoneId, userId } = args.where.zoneId_userId;
+    const oldLength = db.zoneJoins.length;
+    db.zoneJoins = db.zoneJoins.filter(join => join.zoneId !== zoneId || join.userId !== userId);
+    if (db.zoneJoins.length !== oldLength) writeDb(db);
+    return oldLength !== db.zoneJoins.length;
   }
 };
 
@@ -343,5 +417,9 @@ export const dbStore = {
   reports: reportsRepo,
   report: reportsRepo,
   notifications: notificationsRepo,
-  notification: notificationsRepo
+  notification: notificationsRepo,
+  zones: zonesRepo,
+  zone: zonesRepo,
+  zoneJoins: zoneJoinsRepo,
+  zoneJoin: zoneJoinsRepo
 };

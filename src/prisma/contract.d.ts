@@ -21,9 +21,9 @@ import type {
 } from '@prisma/orm-postgres/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'518354fded90c0984a680e2819d5d2dfeac0c0ebc0a3f9dd46fe006ec5992649'>;
+  StorageHashBase<'049f0dba479560fedba4be964fb2a1306464aee3402f03c1b6fac14918edbf8c'>;
 export type ExecutionHash =
-  ExecutionHashBase<'205abc3e8284473050494e6e72dc532972b24a7180426ef8d0ec2ff1977e1b59'>;
+  ExecutionHashBase<'6220942e71b7c6b2c2ab77de02c14106ad8a66d1d0fe574c980dd3eb9ccb8bce'>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
 
@@ -258,6 +258,7 @@ export type FieldOutputTypes = {
       readonly createdAt: TimestampString<3>;
       readonly eventId: CodecTypes['pg/text@1']['output'];
       readonly id: CodecTypes['pg/text@1']['output'];
+      readonly lastKnownZoneId: CodecTypes['pg/text@1']['output'] | null;
       readonly registrationId: CodecTypes['pg/text@1']['output'] | null;
       readonly role: CodecTypes['pg/text@1']['output'];
       readonly status: CodecTypes['pg/text@1']['output'];
@@ -303,6 +304,7 @@ export type FieldOutputTypes = {
       readonly teamId: CodecTypes['pg/text@1']['output'] | null;
       readonly title: CodecTypes['pg/text@1']['output'];
       readonly updatedAt: TimestampString<3>;
+      readonly zoneId: CodecTypes['pg/text@1']['output'] | null;
     };
     readonly Report: {
       readonly createdAt: TimestampString<3>;
@@ -335,6 +337,26 @@ export type FieldOutputTypes = {
       readonly passwordHash: CodecTypes['pg/text@1']['output'] | null;
       readonly role: CodecTypes['pg/text@1']['output'];
       readonly updatedAt: TimestampString<3>;
+    };
+    readonly Zone: {
+      readonly allowedPostTypes: CodecTypes['pg/jsonb@1']['output'];
+      readonly createdAt: TimestampString<3>;
+      readonly createdBy: CodecTypes['pg/text@1']['output'];
+      readonly description: CodecTypes['pg/text@1']['output'];
+      readonly eventId: CodecTypes['pg/text@1']['output'];
+      readonly expiresAt: TimestampString<3>;
+      readonly geometry: CodecTypes['pg/jsonb@1']['output'];
+      readonly id: CodecTypes['pg/text@1']['output'];
+      readonly name: CodecTypes['pg/text@1']['output'];
+      readonly radiusMeters: CodecTypes['pg/int4@1']['output'] | null;
+      readonly ttlSeconds: CodecTypes['pg/int4@1']['output'];
+      readonly updatedAt: TimestampString<3>;
+    };
+    readonly ZoneJoin: {
+      readonly eventId: CodecTypes['pg/text@1']['output'];
+      readonly joinedAt: TimestampString<3>;
+      readonly userId: CodecTypes['pg/text@1']['output'];
+      readonly zoneId: CodecTypes['pg/text@1']['output'];
     };
   };
 };
@@ -361,6 +383,7 @@ export type FieldInputTypes = {
       readonly createdAt: CodecTypes['pg/timestamp-string@1']['input'];
       readonly eventId: CodecTypes['pg/text@1']['input'];
       readonly id: CodecTypes['pg/text@1']['input'];
+      readonly lastKnownZoneId: CodecTypes['pg/text@1']['input'] | null;
       readonly registrationId: CodecTypes['pg/text@1']['input'] | null;
       readonly role: CodecTypes['pg/text@1']['input'];
       readonly status: CodecTypes['pg/text@1']['input'];
@@ -406,6 +429,7 @@ export type FieldInputTypes = {
       readonly teamId: CodecTypes['pg/text@1']['input'] | null;
       readonly title: CodecTypes['pg/text@1']['input'];
       readonly updatedAt: CodecTypes['pg/timestamp-string@1']['input'];
+      readonly zoneId: CodecTypes['pg/text@1']['input'] | null;
     };
     readonly Report: {
       readonly createdAt: CodecTypes['pg/timestamp-string@1']['input'];
@@ -439,6 +463,26 @@ export type FieldInputTypes = {
       readonly role: CodecTypes['pg/text@1']['input'];
       readonly updatedAt: CodecTypes['pg/timestamp-string@1']['input'];
     };
+    readonly Zone: {
+      readonly allowedPostTypes: CodecTypes['pg/jsonb@1']['input'];
+      readonly createdAt: CodecTypes['pg/timestamp-string@1']['input'];
+      readonly createdBy: CodecTypes['pg/text@1']['input'];
+      readonly description: CodecTypes['pg/text@1']['input'];
+      readonly eventId: CodecTypes['pg/text@1']['input'];
+      readonly expiresAt: CodecTypes['pg/timestamp-string@1']['input'];
+      readonly geometry: CodecTypes['pg/jsonb@1']['input'];
+      readonly id: CodecTypes['pg/text@1']['input'];
+      readonly name: CodecTypes['pg/text@1']['input'];
+      readonly radiusMeters: CodecTypes['pg/int4@1']['input'] | null;
+      readonly ttlSeconds: CodecTypes['pg/int4@1']['input'];
+      readonly updatedAt: CodecTypes['pg/timestamp-string@1']['input'];
+    };
+    readonly ZoneJoin: {
+      readonly eventId: CodecTypes['pg/text@1']['input'];
+      readonly joinedAt: CodecTypes['pg/timestamp-string@1']['input'];
+      readonly userId: CodecTypes['pg/text@1']['input'];
+      readonly zoneId: CodecTypes['pg/text@1']['input'];
+    };
   };
 };
 export type StorageColumnTypes = {
@@ -464,6 +508,7 @@ export type StorageColumnTypes = {
       readonly createdAt: TimestampString<3>;
       readonly eventId: CodecTypes['pg/text@1']['output'];
       readonly id: CodecTypes['pg/text@1']['output'];
+      readonly lastKnownZoneId: CodecTypes['pg/text@1']['output'] | null;
       readonly registrationId: CodecTypes['pg/text@1']['output'] | null;
       readonly role: CodecTypes['pg/text@1']['output'];
       readonly status: CodecTypes['pg/text@1']['output'];
@@ -509,6 +554,7 @@ export type StorageColumnTypes = {
       readonly teamId: CodecTypes['pg/text@1']['output'] | null;
       readonly title: CodecTypes['pg/text@1']['output'];
       readonly updatedAt: TimestampString<3>;
+      readonly zoneId: CodecTypes['pg/text@1']['output'] | null;
     };
     readonly Report: {
       readonly createdAt: TimestampString<3>;
@@ -542,6 +588,26 @@ export type StorageColumnTypes = {
       readonly role: CodecTypes['pg/text@1']['output'];
       readonly updatedAt: TimestampString<3>;
     };
+    readonly Zone: {
+      readonly allowedPostTypes: CodecTypes['pg/jsonb@1']['output'];
+      readonly createdAt: TimestampString<3>;
+      readonly createdBy: CodecTypes['pg/text@1']['output'];
+      readonly description: CodecTypes['pg/text@1']['output'];
+      readonly eventId: CodecTypes['pg/text@1']['output'];
+      readonly expiresAt: TimestampString<3>;
+      readonly geometry: CodecTypes['pg/jsonb@1']['output'];
+      readonly id: CodecTypes['pg/text@1']['output'];
+      readonly name: CodecTypes['pg/text@1']['output'];
+      readonly radiusMeters: CodecTypes['pg/int4@1']['output'] | null;
+      readonly ttlSeconds: CodecTypes['pg/int4@1']['output'];
+      readonly updatedAt: TimestampString<3>;
+    };
+    readonly ZoneJoin: {
+      readonly eventId: CodecTypes['pg/text@1']['output'];
+      readonly joinedAt: TimestampString<3>;
+      readonly userId: CodecTypes['pg/text@1']['output'];
+      readonly zoneId: CodecTypes['pg/text@1']['output'];
+    };
   };
 };
 export type StorageColumnInputTypes = {
@@ -567,6 +633,7 @@ export type StorageColumnInputTypes = {
       readonly createdAt: CodecTypes['pg/timestamp-string@1']['input'];
       readonly eventId: CodecTypes['pg/text@1']['input'];
       readonly id: CodecTypes['pg/text@1']['input'];
+      readonly lastKnownZoneId: CodecTypes['pg/text@1']['input'] | null;
       readonly registrationId: CodecTypes['pg/text@1']['input'] | null;
       readonly role: CodecTypes['pg/text@1']['input'];
       readonly status: CodecTypes['pg/text@1']['input'];
@@ -612,6 +679,7 @@ export type StorageColumnInputTypes = {
       readonly teamId: CodecTypes['pg/text@1']['input'] | null;
       readonly title: CodecTypes['pg/text@1']['input'];
       readonly updatedAt: CodecTypes['pg/timestamp-string@1']['input'];
+      readonly zoneId: CodecTypes['pg/text@1']['input'] | null;
     };
     readonly Report: {
       readonly createdAt: CodecTypes['pg/timestamp-string@1']['input'];
@@ -644,6 +712,26 @@ export type StorageColumnInputTypes = {
       readonly passwordHash: CodecTypes['pg/text@1']['input'] | null;
       readonly role: CodecTypes['pg/text@1']['input'];
       readonly updatedAt: CodecTypes['pg/timestamp-string@1']['input'];
+    };
+    readonly Zone: {
+      readonly allowedPostTypes: CodecTypes['pg/jsonb@1']['input'];
+      readonly createdAt: CodecTypes['pg/timestamp-string@1']['input'];
+      readonly createdBy: CodecTypes['pg/text@1']['input'];
+      readonly description: CodecTypes['pg/text@1']['input'];
+      readonly eventId: CodecTypes['pg/text@1']['input'];
+      readonly expiresAt: CodecTypes['pg/timestamp-string@1']['input'];
+      readonly geometry: CodecTypes['pg/jsonb@1']['input'];
+      readonly id: CodecTypes['pg/text@1']['input'];
+      readonly name: CodecTypes['pg/text@1']['input'];
+      readonly radiusMeters: CodecTypes['pg/int4@1']['input'] | null;
+      readonly ttlSeconds: CodecTypes['pg/int4@1']['input'];
+      readonly updatedAt: CodecTypes['pg/timestamp-string@1']['input'];
+    };
+    readonly ZoneJoin: {
+      readonly eventId: CodecTypes['pg/text@1']['input'];
+      readonly joinedAt: CodecTypes['pg/timestamp-string@1']['input'];
+      readonly userId: CodecTypes['pg/text@1']['input'];
+      readonly zoneId: CodecTypes['pg/text@1']['input'];
     };
   };
 };
@@ -671,13 +759,23 @@ export namespace Models {
     posts: public_Post[];
     reports: public_Report[];
     teams: public_Team[];
+    zoneJoins: public_ZoneJoin[];
+    zones: public_Zone[];
     readonly [RelationKeys]?:
-      'memberships' | 'messages' | 'notifications' | 'posts' | 'reports' | 'teams';
+      | 'memberships'
+      | 'messages'
+      | 'notifications'
+      | 'posts'
+      | 'reports'
+      | 'teams'
+      | 'zoneJoins'
+      | 'zones';
   };
   export type public_Membership = {
     createdAt: TimestampString<3>;
     eventId: CodecTypes['pg/text@1']['output'];
     id: CodecTypes['pg/text@1']['output'];
+    lastKnownZoneId: CodecTypes['pg/text@1']['output'] | null;
     registrationId: CodecTypes['pg/text@1']['output'] | null;
     role: CodecTypes['pg/text@1']['output'];
     status: CodecTypes['pg/text@1']['output'];
@@ -732,9 +830,11 @@ export namespace Models {
     teamId: CodecTypes['pg/text@1']['output'] | null;
     title: CodecTypes['pg/text@1']['output'];
     updatedAt: TimestampString<3>;
+    zoneId: CodecTypes['pg/text@1']['output'] | null;
     event: public_Event;
     team: public_Team | null;
-    readonly [RelationKeys]?: 'event' | 'team';
+    zone: public_Zone | null;
+    readonly [RelationKeys]?: 'event' | 'team' | 'zone';
   };
   export type public_Report = {
     createdAt: TimestampString<3>;
@@ -773,9 +873,40 @@ export namespace Models {
     passwordHash: CodecTypes['pg/text@1']['output'] | null;
     role: CodecTypes['pg/text@1']['output'];
     updatedAt: TimestampString<3>;
+    createdZones: public_Zone[];
     memberships: public_Membership[];
     notifications: public_Notification[];
-    readonly [RelationKeys]?: 'memberships' | 'notifications';
+    zoneJoins: public_ZoneJoin[];
+    readonly [RelationKeys]?: 'createdZones' | 'memberships' | 'notifications' | 'zoneJoins';
+  };
+  export type public_Zone = {
+    allowedPostTypes: CodecTypes['pg/jsonb@1']['output'];
+    createdAt: TimestampString<3>;
+    createdBy: CodecTypes['pg/text@1']['output'];
+    description: CodecTypes['pg/text@1']['output'];
+    eventId: CodecTypes['pg/text@1']['output'];
+    expiresAt: TimestampString<3>;
+    geometry: CodecTypes['pg/jsonb@1']['output'];
+    id: CodecTypes['pg/text@1']['output'];
+    name: CodecTypes['pg/text@1']['output'];
+    radiusMeters: CodecTypes['pg/int4@1']['output'] | null;
+    ttlSeconds: CodecTypes['pg/int4@1']['output'];
+    updatedAt: TimestampString<3>;
+    creator: public_User;
+    event: public_Event;
+    joins: public_ZoneJoin[];
+    posts: public_Post[];
+    readonly [RelationKeys]?: 'creator' | 'event' | 'joins' | 'posts';
+  };
+  export type public_ZoneJoin = {
+    eventId: CodecTypes['pg/text@1']['output'];
+    joinedAt: TimestampString<3>;
+    userId: CodecTypes['pg/text@1']['output'];
+    zoneId: CodecTypes['pg/text@1']['output'];
+    event: public_Event;
+    user: public_User;
+    zone: public_Zone;
+    readonly [RelationKeys]?: 'event' | 'user' | 'zone';
   };
 }
 
@@ -789,6 +920,8 @@ export declare const models: {
     Report: Models.public_Report;
     Team: Models.public_Team;
     User: Models.public_User;
+    Zone: Models.public_Zone;
+    ZoneJoin: Models.public_ZoneJoin;
   };
 };
 
@@ -957,6 +1090,12 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly lastKnownZoneId: {
+                  readonly dataType: 'pg/text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: true;
                   readonly many: false;
                 };
                 readonly registrationId: {
@@ -1362,6 +1501,12 @@ type ContractBase = Omit<
                   readonly typeParams: { readonly precision: 3 };
                   readonly many: false;
                 };
+                readonly zoneId: {
+                  readonly dataType: 'pg/text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
               };
               primaryKey: { readonly columns: readonly ['id'] };
               uniques: readonly [];
@@ -1384,6 +1529,11 @@ type ContractBase = Omit<
                 {
                   readonly name: 'Post_status_idx';
                   readonly columns: readonly ['status'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'Post_zoneId_idx';
+                  readonly columns: readonly ['zoneId'];
                   readonly unique: false;
                 },
               ];
@@ -1409,6 +1559,18 @@ type ContractBase = Omit<
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'Team';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'Post';
+                    readonly columns: readonly ['zoneId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'Zone';
                     readonly columns: readonly ['id'];
                   };
                 },
@@ -1664,6 +1826,207 @@ type ContractBase = Omit<
               ];
               foreignKeys: readonly [];
             };
+            readonly Zone: {
+              columns: {
+                readonly allowedPostTypes: {
+                  readonly dataType: 'pg/jsonb';
+                  readonly codecId: 'pg/jsonb@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly createdAt: {
+                  readonly dataType: 'pg/timestamp';
+                  readonly codecId: 'pg/timestamp-string@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly typeParams: { readonly precision: 3 };
+                  readonly many: false;
+                };
+                readonly createdBy: {
+                  readonly dataType: 'pg/text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly description: {
+                  readonly dataType: 'pg/text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly eventId: {
+                  readonly dataType: 'pg/text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly expiresAt: {
+                  readonly dataType: 'pg/timestamp';
+                  readonly codecId: 'pg/timestamp-string@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly precision: 3 };
+                  readonly many: false;
+                };
+                readonly geometry: {
+                  readonly dataType: 'pg/jsonb';
+                  readonly codecId: 'pg/jsonb@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly id: {
+                  readonly dataType: 'pg/text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly name: {
+                  readonly dataType: 'pg/text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly radiusMeters: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly ttlSeconds: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'pg/int4@1', 86400>;
+                  };
+                  readonly many: false;
+                };
+                readonly updatedAt: {
+                  readonly dataType: 'pg/timestamp';
+                  readonly codecId: 'pg/timestamp-string@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly precision: 3 };
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'Zone_eventId_idx';
+                  readonly columns: readonly ['eventId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'Zone_expiresAt_idx';
+                  readonly columns: readonly ['expiresAt'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'Zone';
+                    readonly columns: readonly ['eventId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'Event';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'Zone';
+                    readonly columns: readonly ['createdBy'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'User';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
+            };
+            readonly ZoneJoin: {
+              columns: {
+                readonly eventId: {
+                  readonly dataType: 'pg/text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly joinedAt: {
+                  readonly dataType: 'pg/timestamp';
+                  readonly codecId: 'pg/timestamp-string@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly typeParams: { readonly precision: 3 };
+                  readonly many: false;
+                };
+                readonly userId: {
+                  readonly dataType: 'pg/text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly zoneId: {
+                  readonly dataType: 'pg/text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['zoneId', 'userId'] };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'ZoneJoin_eventId_userId_idx';
+                  readonly columns: readonly ['eventId', 'userId'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'ZoneJoin';
+                    readonly columns: readonly ['zoneId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'Zone';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'ZoneJoin';
+                    readonly columns: readonly ['userId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'User';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'ZoneJoin';
+                    readonly columns: readonly ['eventId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'Event';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
+            };
           };
         };
       };
@@ -1689,6 +2052,8 @@ type ContractBase = Omit<
     readonly Report: { readonly namespace: 'public' & NamespaceId; readonly model: 'Report' };
     readonly Team: { readonly namespace: 'public' & NamespaceId; readonly model: 'Team' };
     readonly User: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
+    readonly Zone: { readonly namespace: 'public' & NamespaceId; readonly model: 'Zone' };
+    readonly ZoneJoin: { readonly namespace: 'public' & NamespaceId; readonly model: 'ZoneJoin' };
   };
   readonly domain: {
     readonly namespaces: {
@@ -1834,6 +2199,25 @@ type ContractBase = Omit<
                   readonly targetFields: readonly ['eventId'];
                 };
               };
+              readonly zoneJoins: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'ZoneJoin';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['eventId'];
+                };
+              };
+              readonly zones: {
+                readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'Zone' };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['eventId'];
+                };
+              };
             };
             readonly storage: {
               readonly table: 'Event';
@@ -1873,6 +2257,10 @@ type ContractBase = Omit<
               };
               readonly id: {
                 readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly lastKnownZoneId: {
+                readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
               readonly registrationId: {
@@ -1947,6 +2335,7 @@ type ContractBase = Omit<
                 readonly createdAt: { readonly column: 'createdAt' };
                 readonly eventId: { readonly column: 'eventId' };
                 readonly id: { readonly column: 'id' };
+                readonly lastKnownZoneId: { readonly column: 'lastKnownZoneId' };
                 readonly registrationId: { readonly column: 'registrationId' };
                 readonly role: { readonly column: 'role' };
                 readonly status: { readonly column: 'status' };
@@ -2180,6 +2569,10 @@ type ContractBase = Omit<
                   readonly typeParams: { readonly precision: 3 };
                 };
               };
+              readonly zoneId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
             };
             readonly relations: {
               readonly event: {
@@ -2200,6 +2593,15 @@ type ContractBase = Omit<
                 readonly nullable: true;
                 readonly on: {
                   readonly localFields: readonly ['teamId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly zone: {
+                readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'Zone' };
+                readonly cardinality: 'N:1';
+                readonly nullable: true;
+                readonly on: {
+                  readonly localFields: readonly ['zoneId'];
                   readonly targetFields: readonly ['id'];
                 };
               };
@@ -2224,6 +2626,7 @@ type ContractBase = Omit<
                 readonly teamId: { readonly column: 'teamId' };
                 readonly title: { readonly column: 'title' };
                 readonly updatedAt: { readonly column: 'updatedAt' };
+                readonly zoneId: { readonly column: 'zoneId' };
               };
             };
           };
@@ -2439,6 +2842,14 @@ type ContractBase = Omit<
               };
             };
             readonly relations: {
+              readonly createdZones: {
+                readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'Zone' };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['createdBy'];
+                };
+              };
               readonly memberships: {
                 readonly to: {
                   readonly namespace: 'public' & NamespaceId;
@@ -2461,6 +2872,17 @@ type ContractBase = Omit<
                   readonly targetFields: readonly ['userId'];
                 };
               };
+              readonly zoneJoins: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'ZoneJoin';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['userId'];
+                };
+              };
             };
             readonly storage: {
               readonly table: 'User';
@@ -2475,6 +2897,196 @@ type ContractBase = Omit<
                 readonly passwordHash: { readonly column: 'passwordHash' };
                 readonly role: { readonly column: 'role' };
                 readonly updatedAt: { readonly column: 'updatedAt' };
+              };
+            };
+          };
+          readonly Zone: {
+            readonly fields: {
+              readonly allowedPostTypes: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/jsonb@1' };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-string@1';
+                  readonly typeParams: { readonly precision: 3 };
+                };
+              };
+              readonly createdBy: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly description: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly eventId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly expiresAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-string@1';
+                  readonly typeParams: { readonly precision: 3 };
+                };
+              };
+              readonly geometry: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/jsonb@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly name: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly radiusMeters: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly ttlSeconds: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-string@1';
+                  readonly typeParams: { readonly precision: 3 };
+                };
+              };
+            };
+            readonly relations: {
+              readonly creator: {
+                readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['createdBy'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly event: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Event';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['eventId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly joins: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'ZoneJoin';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['zoneId'];
+                };
+              };
+              readonly posts: {
+                readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'Post' };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['zoneId'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'Zone';
+              readonly namespaceId: 'public';
+              readonly fields: {
+                readonly allowedPostTypes: { readonly column: 'allowedPostTypes' };
+                readonly createdAt: { readonly column: 'createdAt' };
+                readonly createdBy: { readonly column: 'createdBy' };
+                readonly description: { readonly column: 'description' };
+                readonly eventId: { readonly column: 'eventId' };
+                readonly expiresAt: { readonly column: 'expiresAt' };
+                readonly geometry: { readonly column: 'geometry' };
+                readonly id: { readonly column: 'id' };
+                readonly name: { readonly column: 'name' };
+                readonly radiusMeters: { readonly column: 'radiusMeters' };
+                readonly ttlSeconds: { readonly column: 'ttlSeconds' };
+                readonly updatedAt: { readonly column: 'updatedAt' };
+              };
+            };
+          };
+          readonly ZoneJoin: {
+            readonly fields: {
+              readonly eventId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly joinedAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-string@1';
+                  readonly typeParams: { readonly precision: 3 };
+                };
+              };
+              readonly userId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly zoneId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+            };
+            readonly relations: {
+              readonly event: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Event';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['eventId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly user: {
+                readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['userId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly zone: {
+                readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'Zone' };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['zoneId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'ZoneJoin';
+              readonly namespaceId: 'public';
+              readonly fields: {
+                readonly eventId: { readonly column: 'eventId' };
+                readonly joinedAt: { readonly column: 'joinedAt' };
+                readonly userId: { readonly column: 'userId' };
+                readonly zoneId: { readonly column: 'zoneId' };
               };
             };
           };
@@ -2619,6 +3231,23 @@ type ContractBase = Omit<
           readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
           readonly ref: {
             readonly entry: 'User';
+            readonly field: 'updatedAt';
+            readonly namespace: 'public';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'uuidv4'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'Zone';
+            readonly field: 'id';
+            readonly namespace: 'public';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'Zone';
             readonly field: 'updatedAt';
             readonly namespace: 'public';
           };

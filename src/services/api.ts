@@ -1,4 +1,4 @@
-import { User, EventItem, Membership, Team, Post, Message, Report } from '../types';
+import { User, EventItem, Membership, Team, Post, Message, Report, Zone, GeoJsonPoint, GeoJsonPolygon } from '../types';
 import { getAuthHeaders, setAuthToken, clearAuthToken } from './auth';
 
 export interface AuthResponse {
@@ -138,14 +138,73 @@ export async function importCsvData(eventId: string, csvData: any[]): Promise<an
 }
 
 // Posts
-export async function fetchPosts(eventId: string, category = 'all', search = ''): Promise<Post[]> {
+export async function fetchPosts(eventId: string, category = 'all', search = '', zoneId?: string | null): Promise<Post[]> {
   const params = new URLSearchParams();
   if (category) params.append('category', category);
   if (search) params.append('search', search);
+  if (zoneId) params.append('zoneId', zoneId);
   const res = await fetch(`/api/events/${eventId}/posts?${params.toString()}`, {
     headers: { ...getAuthHeaders() }
   });
   if (!res.ok) throw new Error('Failed to fetch posts');
+  return res.json();
+}
+
+export async function fetchZones(eventId: string): Promise<Zone[]> {
+  const res = await fetch(`/api/events/${eventId}/zones`, { headers: { ...getAuthHeaders() } });
+  if (!res.ok) throw new Error('Failed to fetch zones');
+  return res.json();
+}
+
+export async function createZone(eventId: string, data: {
+  name: string;
+  description: string;
+  geometry: GeoJsonPoint | GeoJsonPolygon;
+  radiusMeters?: number;
+  ttlSeconds: number;
+  allowedPostTypes: Post['category'][];
+}): Promise<Zone> {
+  const res = await fetch(`/api/events/${eventId}/zones`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify(data)
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to create zone');
+  }
+  return res.json();
+}
+
+export async function joinZone(eventId: string, zoneId: string): Promise<void> {
+  const res = await fetch(`/api/events/${eventId}/zones/${zoneId}/join`, {
+    method: 'POST',
+    headers: { ...getAuthHeaders() }
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to join zone');
+  }
+}
+
+export async function leaveZone(eventId: string, zoneId: string): Promise<void> {
+  const res = await fetch(`/api/events/${eventId}/zones/${zoneId}/join`, {
+    method: 'DELETE',
+    headers: { ...getAuthHeaders() }
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to leave zone');
+  }
+}
+
+export async function locateZone(eventId: string, latitude: number, longitude: number, simulated = false): Promise<{ zoneId: string | null; zoneName: string | null }> {
+  const res = await fetch(`/api/events/${eventId}/zones/locate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ latitude, longitude, simulated })
+  });
+  if (!res.ok) throw new Error('Could not update current zone');
   return res.json();
 }
 
