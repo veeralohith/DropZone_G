@@ -406,6 +406,24 @@ async function runSecurityAudit() {
   }
   console.log('========================================================\n');
 
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const dataPath = path.resolve('data.json');
+    if (fs.existsSync(dataPath)) {
+      const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+      data.posts = (data.posts || []).filter((p: any) =>
+        p.title !== 'IDOR Prevention Test' &&
+        p.title !== 'IDOR check post' &&
+        !p.id.startsWith('audit-') &&
+        !p.id.startsWith('expired-pst-')
+      );
+      data.reports = (data.reports || []).filter((r: any) => !r.id.startsWith('audit-'));
+      data.notifications = (data.notifications || []).filter((n: any) => !n.id.startsWith('audit-'));
+      fs.writeFileSync(dataPath, JSON.stringify(data, null, 2), 'utf8');
+    }
+  } catch {}
+
   await pool.end();
 }
 

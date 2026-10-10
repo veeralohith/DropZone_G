@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { EventItem, User } from '../types';
+import { fetchNotifications, markNotificationAsRead } from '../services/api';
 import { Bell, ShieldCheck, MapPin, CheckCircle2, Clock, Check, Filter } from 'lucide-react';
 
 interface NotificationsViewProps {
@@ -10,8 +11,27 @@ interface NotificationsViewProps {
 export const NotificationsView: React.FC<NotificationsViewProps> = ({ currentEvent, currentUser }) => {
   const [filter, setFilter] = useState<'all' | 'zone' | 'announcements'>('all');
   const [isAllRead, setIsAllRead] = useState(false);
+  const [liveNotifications, setLiveNotifications] = useState<any[]>([]);
 
-  const notifications = [
+  useEffect(() => {
+    if (currentEvent) {
+      loadNotifications();
+    }
+  }, [currentEvent]);
+
+  const loadNotifications = async () => {
+    if (!currentEvent) return;
+    try {
+      const data = await fetchNotifications(currentEvent.id);
+      if (Array.isArray(data) && data.length > 0) {
+        setLiveNotifications(data);
+      }
+    } catch (err) {
+      console.warn('Could not load live notifications, using local notices:', err);
+    }
+  };
+
+  const defaultNotifications = [
     {
       id: 'notif-1',
       type: 'zone',
@@ -41,7 +61,44 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({ currentEve
     }
   ];
 
-  const filtered = notifications.filter((n) => {
+  const formatTimeAgo = (dateStr?: string) => {
+    if (!dateStr) return 'Just now';
+    const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
+    if (diff < 1) return 'Just now';
+    if (diff < 60) return `${diff}m ago`;
+    const hrs = Math.floor(diff / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  };
+
+  const mappedLive = liveNotifications.map((n) => {
+    const isAnnounce = n.type === 'announcement' || n.type === 'announcements';
+    return {
+      id: n.id,
+      type: isAnnounce ? 'announcements' : (n.type === 'zone_verified' ? 'zone' : n.type),
+      title: n.title,
+      time: formatTimeAgo(n.createdAt),
+      content: n.content,
+      icon: isAnnounce ? Bell : (n.type === 'team_assigned' ? ShieldCheck : CheckCircle2),
+      color: isAnnounce ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600',
+      isRead: n.isRead
+    };
+  });
+
+  const allDisplayNotifications = mappedLive.length > 0 ? mappedLive : defaultNotifications;
+
+  const handleMarkAllRead = async () => {
+    setIsAllRead(true);
+    if (currentEvent && liveNotifications.length > 0) {
+      for (const n of liveNotifications) {
+        if (!n.isRead) {
+          markNotificationAsRead(currentEvent.id, n.id).catch(() => {});
+        }
+      }
+    }
+  };
+
+  const filtered = allDisplayNotifications.filter((n) => {
     if (filter === 'all') return true;
     return n.type === filter;
   });
@@ -55,7 +112,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({ currentEve
         </div>
 
         <button
-          onClick={() => setIsAllRead(true)}
+          onClick={handleMarkAllRead}
           className="self-start sm:self-auto px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
         >
           <Check className="w-3.5 h-3.5" />

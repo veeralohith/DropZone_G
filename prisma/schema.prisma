@@ -93,6 +93,7 @@ model Zone {
   geometry         Json
   radiusMeters     Int?
   ttlSeconds       Int        @default(86400)
+  ttlPolicyNote    String?
   allowedPostTypes Json
   createdBy        String
   creator          User       @relation(fields: [createdBy], references: [id], onDelete: Restrict)
@@ -120,32 +121,46 @@ model ZoneJoin {
 }
 
 model Post {
-  id             String   @id @default(uuid())
-  eventId        String
-  event          Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  authorId       String
-  authorName     String
-  category       String   // lost_found | requirement | announcement | qa | promotion
-  title          String
-  content        String
-  structuredData Json?    // itemType, itemName, reqType, neededBy, priority, etc.
-  approxLocation String?
-  audience       String   @default("all") // all | team | organizers
-  teamId         String?
-  team           Team?    @relation(fields: [teamId], references: [id], onDelete: SetNull)
-  zoneId         String?
-  zone           Zone?    @relation(fields: [zoneId], references: [id], onDelete: SetNull)
-  status         String   @default("active") // active | resolved | expired | pending_review
-  expiresAt      DateTime
-  reportCount    Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  eventId            String
+  event              Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  authorId           String
+  authorName         String
+  category           String   // lost_found | requirement | announcement | qa | promotion
+  title              String
+  content            String
+  structuredData     Json?    // itemType, itemName, reqType, neededBy, priority, etc.
+  approxLocation     String?
+  audience           String   @default("all") // all | team | organizers
+  teamId             String?
+  team               Team?    @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  zoneId             String?
+  zone               Zone?    @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+  status             String   @default("live") // live | active | resolved | expired | removed | held | pending_review
+  removedReason      String?
+  heldUntil          DateTime?
+  ttlSecondsSnapshot Int?
+  expiresAt          DateTime
+  reportCount        Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   @@index([eventId])
   @@index([category])
   @@index([status])
   @@index([expiresAt])
   @@index([zoneId])
+}
+
+model ExpiryAuditLog {
+  id          String   @id @default(uuid())
+  postId      String
+  action      String   // expired | purged | held
+  performedAt DateTime @default(now())
+  reason      String?
+
+  @@index([postId])
+  @@index([performedAt])
 }
 
 model Message {

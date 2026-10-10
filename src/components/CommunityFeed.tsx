@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { EventItem, Post, User } from '../types';
 import { fetchPosts, createPost, createReport, updatePostStatus } from '../services/api';
-import { Search, MapPin, MessageSquare, Flag, Plus, CheckCircle2, Clock, Filter, AlertCircle, Share2, Layers, Check, Send, Sparkles, ChevronDown, ChevronUp, Cpu, HelpCircle, Tag, Radio } from 'lucide-react';
+import { Search, MapPin, MessageSquare, Flag, Plus, CheckCircle2, Clock, Filter, AlertCircle, Share2, Layers, Check, Send, Sparkles, ChevronDown, ChevronUp, Cpu, HelpCircle, Tag, Radio, Info, ExternalLink, ShieldAlert } from 'lucide-react';
 
 interface CommunityFeedProps {
   currentEvent: EventItem | null;
@@ -12,6 +12,7 @@ interface CommunityFeedProps {
   onOpenCreatePost: () => void;
   onSelectPost: (post: Post) => void;
   onOpenInboxWithMessage?: (authorId: string, authorName: string) => void;
+  onNavigateToPolicy?: () => void;
 }
 
 export const CommunityFeed: React.FC<CommunityFeedProps> = ({
@@ -22,7 +23,8 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
   allowedPostTypes,
   onOpenCreatePost,
   onSelectPost,
-  onOpenInboxWithMessage
+  onOpenInboxWithMessage,
+  onNavigateToPolicy
 }) => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(false);
@@ -41,6 +43,9 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
   const [composerNeededBy, setComposerNeededBy] = useState('In 2 hours');
   const [isPosting, setIsPosting] = useState(false);
   const [composerSuccess, setComposerSuccess] = useState(false);
+  const [composerError, setComposerError] = useState<string | null>(null);
+
+  const isStaff = currentUser.role === 'organizer' || currentUser.role === 'moderator' || currentEvent?.ownerId === currentUser.id;
 
   // Reporting state
   const [reportingPostId, setReportingPostId] = useState<string | null>(null);
@@ -88,7 +93,13 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
 
   const handleQuickPostSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setComposerError(null);
     if (!currentEvent || !composerTitle.trim() || !composerContent.trim()) return;
+
+    if (composerCategory === 'announcement' && !isStaff) {
+      setComposerError('Only event organizers and moderators can publish official announcements. Please switch to an organizer account or choose another post type.');
+      return;
+    }
 
     setIsPosting(true);
     try {
@@ -103,7 +114,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
         authorId: currentUser.id,
         authorName: currentUser.name,
         category: composerCategory,
-        zoneId: zoneId || null,
+        zoneId: composerCategory === 'announcement' ? null : (zoneId || null),
         title: composerTitle.trim(),
         content: composerContent.trim(),
         structuredData,
@@ -113,6 +124,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
       });
 
       setComposerSuccess(true);
+      setComposerError(null);
       setTimeout(() => {
         setComposerSuccess(false);
         setComposerTitle('');
@@ -122,8 +134,9 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
       }, 1200);
 
       await loadPosts();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to create quick post:', err);
+      setComposerError(err?.message || 'Failed to publish post. Please try again.');
     } finally {
       setIsPosting(false);
     }
@@ -191,16 +204,62 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
     setCommentInput({ ...commentInput, [postId]: '' });
   };
 
-  const formatExpiresIn = (expiresAt: string) => {
+  // Live countdown ticker: updates every 30s and on window focus
+  const [, setTicker] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTicker((prev) => prev + 1);
+    }, 30000);
+
+    const handleFocus = () => {
+      setTicker((prev) => prev + 1);
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
+
+  const getExpiresCountdown = (expiresAt: string) => {
     const diffMs = new Date(expiresAt).getTime() - Date.now();
-    if (diffMs <= 0) return 'Expired';
-    const hours = Math.floor(diffMs / (1000 * 60 * 60));
-    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / 60000);
+    if (diffMs <= 0) {
+      return {
+        label: 'Expired',
+        colorClass: 'text-slate-400 bg-slate-100 border-slate-200'
+      };
+    }
+    const totalSeconds = Math.floor(diffMs / 1000);
+    const totalMinutes = Math.floor(totalSeconds / 60);
+
+    // Under 1 minute -> turn red: "Expiring now"
+    if (totalSeconds < 60) {
+      return {
+        label: 'Expiring now',
+        colorClass: 'text-rose-700 bg-rose-50 border-rose-200 animate-pulse font-bold'
+      };
+    }
+    // Under 10 minutes -> turn amber: "Expires in Xm"
+    if (totalMinutes < 10) {
+      return {
+        label: `Expires in ${totalMinutes}m`,
+        colorClass: 'text-amber-800 bg-amber-50 border-amber-200 font-semibold'
+      };
+    }
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
     if (hours > 24) {
       const days = Math.floor(hours / 24);
-      return `Expires in ${days}d ${hours % 24}h`;
+      return {
+        label: `Expires in ${days}d ${hours % 24}h`,
+        colorClass: 'text-slate-600 bg-slate-50 border-slate-200'
+      };
     }
-    return `Expires in ${hours}h ${minutes}m`;
+    return {
+      label: `Expires in ${hours}h ${minutes}m`,
+      colorClass: 'text-slate-600 bg-slate-50 border-slate-200'
+    };
   };
 
   const formatTimeAgo = (createdAt: string) => {
@@ -230,7 +289,17 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
     }
   };
 
-  const filteredPosts = posts.filter((p) => {
+  const now = Date.now();
+  // Defense in depth: Client also hides locally expired posts even if server is stale
+  const nonExpiredPosts = posts.filter((p) => {
+    if (p.status === 'held') return true; // Moderation hold stays visible for transparency
+    if (p.status === 'expired' || p.status === 'removed') return false;
+    return !p.expiresAt || new Date(p.expiresAt).getTime() > now;
+  });
+
+  const expiredCountLocally = posts.length - nonExpiredPosts.length;
+
+  const filteredPosts = nonExpiredPosts.filter((p) => {
     if (hideResolved && p.status === 'resolved') return false;
     return true;
   });
@@ -305,19 +374,29 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
               </button>
             </div>
 
+            {composerError && (
+              <div role="alert" className="p-3 rounded-lg bg-rose-50 border border-rose-200 flex items-start gap-2 text-xs text-rose-800">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+                <span>{composerError}</span>
+              </div>
+            )}
+
             {/* Category Selector Tabs */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
               {[
                 { id: 'requirement', label: 'Hardware & Needs' },
                 { id: 'lost_found', label: 'Lost & Found' },
                 { id: 'qa', label: 'Q&A & Help' },
-                { id: 'announcement', label: 'Announcement' },
+                { id: 'announcement', label: `Announcement${isStaff ? ' (Broadcast)' : ' (Staff Only)'}` },
                 { id: 'promotion', label: 'Sponsored (reviewed)' }
               ].filter(c => !zoneId || !allowedPostTypes || allowedPostTypes.includes(c.id as Post['category'])).map((c) => (
                 <button
                   key={c.id}
                   type="button"
-                  onClick={() => setComposerCategory(c.id as any)}
+                  onClick={() => {
+                    setComposerError(null);
+                    setComposerCategory(c.id as any);
+                  }}
                   className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
                     composerCategory === c.id
                       ? 'bg-slate-900 text-white shadow-xs'
@@ -328,6 +407,21 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
                 </button>
               ))}
             </div>
+
+            {composerCategory === 'announcement' && !isStaff && (
+              <div className="p-3 bg-amber-50 text-amber-800 text-xs rounded-lg border border-amber-200 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                <div>
+                  <span className="font-semibold">Staff Authorization Required:</span> Only official event organizers and moderators can publish event announcements. Switch persona to <strong>Dr. Priya Nair</strong> (Organizer) or <strong>Vikram Mehta</strong> (Moderator) to broadcast.
+                </div>
+              </div>
+            )}
+            {composerCategory === 'announcement' && isStaff && (
+              <div className="p-2.5 bg-blue-50 text-blue-800 text-xs rounded-lg border border-blue-200 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 shrink-0 text-blue-600" />
+                <span>Publishing as <strong>{currentUser.name}</strong> ({currentUser.role}). This announcement broadcasts event-wide with attendee alerts.</span>
+              </div>
+            )}
 
             <div className="space-y-3">
               <input
@@ -404,12 +498,30 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
               </div>
             </div>
 
+            {/* Pre-Post Notice (Inline under composer) */}
+            <div className="p-2.5 rounded-lg bg-amber-50/80 border border-amber-200/70 text-xs text-amber-900 flex items-start gap-2">
+              <Info className="w-3.5 h-3.5 text-amber-700 mt-0.5 shrink-0" />
+              <div className="leading-snug">
+                <span>Your post will disappear from the feed in 2h. It may remain in server logs, backups, and screenshots. <strong>Expiry is not deletion.</strong> </span>
+                {onNavigateToPolicy && (
+                  <button
+                    type="button"
+                    onClick={onNavigateToPolicy}
+                    className="font-bold text-blue-700 hover:text-blue-900 underline inline-flex items-center gap-0.5 cursor-pointer ml-1"
+                  >
+                    <span>Learn more</span>
+                    <ExternalLink className="w-2.5 h-2.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* Composer Footer */}
             <div className="flex items-center justify-between pt-2 border-t border-slate-100">
               <div className="text-[11px] text-slate-500">
-                <span>Auto-expires after 24h</span>
+                <span>TTL set server-side</span>
                 <span className="mx-1">·</span>
-                <span>Volatile geofence verification</span>
+                <span>Active geofence zone</span>
               </div>
 
               <div className="flex items-center gap-2">
@@ -629,12 +741,30 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
                     </div>
                   </div>
 
-                  {/* Top Right: TTL Expiry */}
+                  {/* Top Right: TTL Expiry & Moderation Hold */}
                   <div className="flex flex-col items-end gap-1 shrink-0">
-                    <div className="flex items-center gap-1 text-[11px] text-slate-400 font-medium">
-                      <Clock className="w-3 h-3" />
-                      <span className="tabular-nums">{formatExpiresIn(post.expiresAt)}</span>
-                    </div>
+                    {post.status === 'held' ? (
+                      <div
+                        className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-semibold"
+                        title="Reported content is retained until reviewed, even if its TTL passes."
+                      >
+                        <ShieldAlert className="w-3 h-3 text-indigo-600 shrink-0" />
+                        <span>Held for Review</span>
+                      </div>
+                    ) : (
+                      (() => {
+                        const countdown = getExpiresCountdown(post.expiresAt);
+                        return (
+                          <div
+                            className={`flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md border font-medium tabular-nums ${countdown.colorClass}`}
+                            title="Auto-expires based on Zone TTL policy"
+                          >
+                            <Clock className="w-3 h-3 shrink-0" />
+                            <span>{countdown.label}</span>
+                          </div>
+                        );
+                      })()
+                    )}
                   </div>
                 </div>
 
@@ -790,6 +920,14 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
               </div>
             );
           })}
+
+          {expiredCountLocally > 0 && (
+            <div className="py-4 flex items-center justify-center gap-3 text-xs text-slate-400 font-medium select-none">
+              <div className="h-px bg-slate-200 flex-1 max-w-[140px]" />
+              <span>— older posts expired —</span>
+              <div className="h-px bg-slate-200 flex-1 max-w-[140px]" />
+            </div>
+          )}
         </div>
       )}
     </div>

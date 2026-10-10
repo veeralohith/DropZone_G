@@ -16,6 +16,7 @@ import { ZoneSimulatorModal } from './components/ZoneSimulatorModal';
 import { CreatePostModal } from './components/CreatePostModal';
 import { PostDetailModal } from './components/PostDetailModal';
 import { ZonesView } from './components/ZonesView';
+import { ExpiryPolicyView } from './components/ExpiryPolicyView';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -36,6 +37,18 @@ export default function App() {
 
   useEffect(() => {
     restoreSession();
+    if (window.location.pathname === '/expiry-policy' || window.location.hash === '#/expiry-policy') {
+      setActiveTab('expiry-policy');
+    }
+    const handlePopState = () => {
+      if (window.location.pathname === '/expiry-policy' || window.location.hash === '#/expiry-policy') {
+        setActiveTab('expiry-policy');
+      } else {
+        setActiveTab('feed');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   const restoreSession = async () => {
@@ -118,6 +131,11 @@ export default function App() {
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
+    if (tab === 'expiry-policy') {
+      window.history.pushState({}, '', '/expiry-policy');
+    } else if (window.location.pathname === '/expiry-policy') {
+      window.history.pushState({}, '', '/');
+    }
   };
 
   // Initial authentication check state
@@ -164,6 +182,7 @@ export default function App() {
             onOpenInboxWithMessage={() => {
               setActiveTab('inbox');
             }}
+            onNavigateToPolicy={() => handleTabChange('expiry-policy')}
           />
         )}
 
@@ -173,6 +192,14 @@ export default function App() {
           currentUser={currentUser}
           onCurrentZoneChange={setActiveZone}
         />
+
+        {activeTab === 'expiry-policy' && (
+          <ExpiryPolicyView
+            currentEvent={currentEvent}
+            currentUser={currentUser}
+            onNavigateToFeed={() => handleTabChange('feed')}
+          />
+        )}
 
         {activeTab === 'inbox' && (
           <InboxView currentEvent={currentEvent} currentUser={currentUser} />
@@ -227,6 +254,7 @@ export default function App() {
         zoneId={activeZone?.id || null}
         allowedPostTypes={activeZone?.allowedPostTypes}
         onPostCreated={() => setPostRefreshKey((key) => key + 1)}
+        onNavigateToPolicy={() => handleTabChange('expiry-policy')}
       />
 
       <PostDetailModal

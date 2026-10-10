@@ -30,6 +30,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'zones', label: 'Map & Zones' },
     { id: 'inbox', label: 'Channels' },
     { id: 'notifications', label: 'Alerts' },
+    { id: 'expiry-policy', label: 'Expiry Policy' },
     ...((currentUser.role === 'organizer' || currentUser.role === 'moderator')
       ? [{ id: 'organizer', label: 'Organizer Hub' }]
       : []),

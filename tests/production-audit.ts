@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 dotenv.config({ override: true });
 import pg from 'pg';
 import { prisma, pool } from '../src/lib/prisma.js';
+import { dbStore } from '../src/lib/db.js';
 
 interface TestResult {
   name: string;
@@ -442,10 +443,27 @@ async function runAudit() {
 
   // 7. TTL & Expiry Enforcement
   try {
-    await pool.query(`
-      INSERT INTO "Post" (id, "eventId", "authorId", "authorName", category, title, content, status, "expiresAt", "reportCount", "createdAt", "updatedAt")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW() - INTERVAL '1 hour', 0, NOW(), NOW())
-    `, [`expired-pst-${Date.now()}`, 'evt-samartha-2026', partAuth.user.id, 'Aarav', 'lost_found', 'Expired Test Post', 'Old content', 'active']);
+    const expiredPostId = `expired-pst-${Date.now()}`;
+    try {
+      await pool.query(`
+        INSERT INTO "Post" (id, "eventId", "authorId", "authorName", category, title, content, status, "expiresAt", "reportCount", "createdAt", "updatedAt")
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW() - INTERVAL '1 hour', 0, NOW(), NOW())
+      `, [expiredPostId, 'evt-samartha-2026', partAuth.user.id, 'Aarav', 'lost_found', 'Expired Test Post', 'Old content', 'active']);
+    } catch {
+      await dbStore.posts.create({
+        data: {
+          id: expiredPostId,
+          eventId: 'evt-samartha-2026',
+          authorId: partAuth.user.id,
+          authorName: 'Aarav',
+          category: 'lost_found',
+          title: 'Expired Test Post',
+          content: 'Old content',
+          status: 'active',
+          expiresAt: new Date(Date.now() - 3600000).toISOString()
+        }
+      });
+    }
 
     const postsRes = await fetch('http://localhost:3000/api/events/evt-samartha-2026/posts', {
       headers: { 'Authorization': `Bearer ${partToken}` }
@@ -547,6 +565,25 @@ async function runAudit() {
     console.log(`       ${r.detail}`);
   }
   console.log('================================================\n');
+
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const dataPath = path.resolve('data.json');
+    if (fs.existsSync(dataPath)) {
+      const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+      data.posts = (data.posts || []).filter((p: any) =>
+        !p.id.startsWith('audit-') &&
+        !p.id.startsWith('expired-pst-') &&
+        p.title !== 'Audit Test Requirement' &&
+        p.title !== 'IDOR Prevention Test' &&
+        p.title !== 'IDOR check post'
+      );
+      data.reports = (data.reports || []).filter((r: any) => !r.id.startsWith('audit-'));
+      data.notifications = (data.notifications || []).filter((n: any) => !n.id.startsWith('audit-'));
+      fs.writeFileSync(dataPath, JSON.stringify(data, null, 2), 'utf8');
+    }
+  } catch {}
 
   await pool.end();
 }

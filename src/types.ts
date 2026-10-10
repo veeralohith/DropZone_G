@@ -46,12 +46,21 @@ export interface Zone {
   geometry: GeoJsonPoint | GeoJsonPolygon;
   radiusMeters: number | null;
   ttlSeconds: number;
+  ttlPolicyNote?: string | null;
   allowedPostTypes: Post['category'][];
   createdBy: string;
   expiresAt: string;
   createdAt: string;
   memberCount: number;
   joined: boolean;
+}
+
+export interface ExpiryAuditLog {
+  id: string;
+  postId: string;
+  action: 'expired' | 'purged' | 'held';
+  performedAt: string;
+  reason?: string | null;
 }
 
 export interface Membership {
@@ -96,7 +105,10 @@ export interface Post {
   approxLocation?: string;
   audience: 'all' | 'team' | 'organizers';
   teamId?: string;
-  status: 'active' | 'resolved' | 'expired' | 'pending_review';
+  status: 'live' | 'active' | 'resolved' | 'expired' | 'removed' | 'held' | 'pending_review';
+  removedReason?: string | null;
+  heldUntil?: string | null;
+  ttlSecondsSnapshot?: number;
   expiresAt: string;
   createdAt: string;
   reportCount: number;

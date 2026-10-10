@@ -16,6 +16,7 @@ interface DbSchema {
   notifications: any[];
   zones: any[];
   zoneJoins: any[];
+  expiryAuditLogs: any[];
 }
 
 const defaultData: DbSchema = {
@@ -28,7 +29,8 @@ const defaultData: DbSchema = {
   reports: [],
   notifications: [],
   zones: [],
-  zoneJoins: []
+  zoneJoins: [],
+  expiryAuditLogs: []
 };
 
 function readDb(): DbSchema {
@@ -228,17 +230,28 @@ const postsRepo = {
     const postId = args?.where?.id;
     return readDb().posts.find(post => post.id === postId) || null;
   },
-  async findMany(args?: { where?: any }) {
+  async findMany(args?: { where?: any; limit?: number; offset?: number }) {
     const db = readDb();
     const where = args?.where;
     let list = db.posts;
     if (where?.eventId) list = list.filter(p => p.eventId === where.eventId);
-    if (where?.status) list = list.filter(p => p.status === where.status);
+
+    if (where?.status) {
+      if (where.status === 'active' || where.status === 'live') {
+        list = list.filter(p => p.status === 'active' || p.status === 'live');
+        if (!where.includeExpired) {
+          list = list.filter(p => !p.expiresAt || new Date(p.expiresAt).getTime() > Date.now());
+        }
+      } else {
+        list = list.filter(p => p.status === where.status);
+      }
+    } else if (!where?.includeExpired) {
+      // By default in standard feed, filter out expired and held/removed posts
+      list = list.filter(p => (p.status === 'live' || p.status === 'active' || !p.status) && (!p.expiresAt || new Date(p.expiresAt).getTime() > Date.now()));
+    }
+
     if (where?.category) list = list.filter(p => p.category === where.category);
     if (where?.zoneId) list = list.filter(p => p.zoneId === where.zoneId);
-    if (where?.status === 'active' && !where.includeExpired) {
-      list = list.filter(p => !p.expiresAt || new Date(p.expiresAt).getTime() > Date.now());
-    }
     if (where?.OR) {
       list = list.filter(p => {
         return where.OR.some((cond: any) => {
@@ -252,11 +265,30 @@ const postsRepo = {
         });
       });
     }
-    return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    list = list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    if (typeof args?.offset === 'number') {
+      list = list.slice(args.offset);
+    }
+    if (typeof args?.limit === 'number') {
+      list = list.slice(0, args.limit);
+    }
+    return list;
   },
   async create(args?: { data: any }) {
     const db = readDb();
-    const newPost = { id: `pst-${Date.now()}`, createdAt: new Date().toISOString(), reportCount: 0, ...args?.data };
+    const data = args?.data || {};
+    const newPost = {
+      id: data.id || `pst-${Date.now()}`,
+      createdAt: data.createdAt || new Date().toISOString(),
+      updatedAt: data.updatedAt || new Date().toISOString(),
+      reportCount: data.reportCount || 0,
+      status: data.status || 'live',
+      ttlSecondsSnapshot: data.ttlSecondsSnapshot ?? null,
+      removedReason: data.removedReason ?? null,
+      heldUntil: data.heldUntil ?? null,
+      ...data
+    };
     db.posts.unshift(newPost);
     writeDb(db);
     return newPost;
@@ -270,12 +302,63 @@ const postsRepo = {
       if (data?.reportCount?.increment) {
         db.posts[idx].reportCount = (db.posts[idx].reportCount || 0) + data.reportCount.increment;
       } else {
-        db.posts[idx] = { ...db.posts[idx], ...data };
+        db.posts[idx] = { ...db.posts[idx], ...data, updatedAt: new Date().toISOString() };
       }
       writeDb(db);
       return db.posts[idx];
     }
     return null;
+  },
+  async cleanupExpired(eventId?: string, graceMs = 24 * 60 * 60 * 1000) {
+    const db = readDb();
+    const now = Date.now();
+    let expiredCount = 0;
+    if (!db.expiryAuditLogs) db.expiryAuditLogs = [];
+
+    db.posts = db.posts.map(p => {
+      if (eventId && p.eventId !== eventId) return p;
+
+      // Moderation override: skip posts that are held
+      if (p.status === 'held') {
+        return p;
+      }
+
+      const expiresAtMs = p.expiresAt ? new Date(p.expiresAt).getTime() : 0;
+
+      // 1. Mark expired if active/live and past expiresAt
+      if ((p.status === 'active' || p.status === 'live') && expiresAtMs <= now) {
+        p.status = 'expired';
+        p.updatedAt = new Date().toISOString();
+        expiredCount++;
+        db.expiryAuditLogs.unshift({
+          id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          postId: p.id,
+          action: 'expired',
+          reason: 'TTL elapsed and post transitioned to expired',
+          performedAt: new Date().toISOString()
+        });
+      }
+
+      // 2. Hard-purge content after grace period (e.g., 24h)
+      if (p.status === 'expired' && expiresAtMs <= (now - graceMs) && !p.isPurged) {
+        p.isPurged = true;
+        p.content = '[Purged following TTL expiry and grace retention]';
+        p.structuredData = null;
+        p.updatedAt = new Date().toISOString();
+        db.expiryAuditLogs.unshift({
+          id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          postId: p.id,
+          action: 'purged',
+          reason: 'Hard-purged from primary store after grace period',
+          performedAt: new Date().toISOString()
+        });
+      }
+
+      return p;
+    });
+
+    writeDb(db);
+    return expiredCount;
   }
 };
 
@@ -398,6 +481,52 @@ const notificationsRepo = {
     db.notifications.unshift(newNotif);
     writeDb(db);
     return newNotif;
+  },
+  async update(args?: { where?: { id: string }; data: any }) {
+    const db = readDb();
+    const where = args?.where;
+    const data = args?.data;
+    const idx = db.notifications.findIndex(n => n.id === where?.id);
+    if (idx !== -1) {
+      db.notifications[idx] = { ...db.notifications[idx], ...data };
+      writeDb(db);
+      return db.notifications[idx];
+    }
+    return null;
+  }
+};
+
+const expiryAuditLogsRepo = {
+  async findMany(args?: { where?: { postId?: string; action?: string }; limit?: number; offset?: number }) {
+    const db = readDb();
+    let logs = db.expiryAuditLogs || [];
+    const where = args?.where;
+    if (where?.postId) {
+      logs = logs.filter(l => l.postId === where.postId);
+    }
+    if (where?.action) {
+      logs = logs.filter(l => l.action === where.action);
+    }
+    logs = logs.sort((a, b) => new Date(b.performedAt).getTime() - new Date(a.performedAt).getTime());
+    if (typeof args?.offset === 'number') {
+      logs = logs.slice(args.offset);
+    }
+    if (typeof args?.limit === 'number') {
+      logs = logs.slice(0, args.limit);
+    }
+    return logs;
+  },
+  async create(args: { data: any }) {
+    const db = readDb();
+    if (!db.expiryAuditLogs) db.expiryAuditLogs = [];
+    const newLog = {
+      id: args.data.id || `audit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      performedAt: args.data.performedAt || new Date().toISOString(),
+      ...args.data
+    };
+    db.expiryAuditLogs.unshift(newLog);
+    writeDb(db);
+    return newLog;
   }
 };
 
@@ -421,5 +550,7 @@ export const dbStore = {
   zones: zonesRepo,
   zone: zonesRepo,
   zoneJoins: zoneJoinsRepo,
-  zoneJoin: zoneJoinsRepo
+  zoneJoin: zoneJoinsRepo,
+  expiryAuditLogs: expiryAuditLogsRepo,
+  expiryAuditLog: expiryAuditLogsRepo
 };

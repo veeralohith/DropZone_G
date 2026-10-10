@@ -309,3 +309,29 @@ export async function markNotificationAsRead(eventId: string, id: string): Promi
   return res.json();
 }
 
+// TTL & Expiry Transparency APIs
+export async function fetchExpiryPolicy(): Promise<any> {
+  const res = await fetch('/api/expiry-policy');
+  if (!res.ok) throw new Error('Failed to fetch expiry policy');
+  return res.json();
+}
+
+export async function fetchExpiryAuditLogs(eventId?: string): Promise<any[]> {
+  const url = eventId ? `/api/events/${eventId}/expiry-audit-log` : '/api/expiry-audit-log';
+  const res = await fetch(url, {
+    headers: { ...getAuthHeaders() }
+  });
+  if (!res.ok) throw new Error('Failed to fetch expiry audit logs');
+  return res.json();
+}
+
+export async function triggerTtlCleanup(eventId: string): Promise<{ success: boolean; expiredCount: number }> {
+  const res = await fetch(`/api/events/${eventId}/posts/cleanup-expired`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }
+  });
+  if (!res.ok) throw new Error('Failed to trigger TTL cleanup');
+  return res.json();
+}
+
+

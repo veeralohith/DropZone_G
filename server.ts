@@ -1089,27 +1089,31 @@ async function startServer() {
       if (preciseCoordinatePair.test(publicText)) {
         return res.status(400).json({ error: 'Do not include precise coordinates in public posts. Use an approximate venue description.' });
       }
-      if (category === 'announcement' && req.user.role !== 'organizer') {
+      const isStaff = ['organizer', 'owner', 'moderator'].includes(req.user.role);
+      let isAuthorizedStaff = isStaff;
+      if (!isStaff) {
         const membership = await prisma.membership.findUnique({
           where: { eventId_userId: { eventId, userId: req.user.id } }
         });
-        if (!['organizer', 'owner'].includes(membership?.role || '')) {
-          return res.status(403).json({ error: 'Only event organizers can publish announcements.' });
+        if (['organizer', 'owner', 'moderator'].includes(membership?.role || '')) {
+          isAuthorizedStaff = true;
         }
+      }
+
+      if (category === 'announcement' && !isAuthorizedStaff) {
+        return res.status(403).json({ error: 'Only event organizers and moderators can publish announcements.' });
       }
 
       // Security: author is strictly derived from authenticated caller token
       const authorId = req.user.id;
       const authorName = req.user.name;
 
-      const ttl = ttlMinutes ? Math.max(1, Math.min(parseInt(ttlMinutes, 10), 10080)) : 1440;
-      let expiresAt = new Date(Date.now() + ttl * 60000).toISOString();
+      let zone: any = null;
+      let ttlSeconds = 7200; // default 2 hours
 
       const isAnnouncement = category === 'announcement';
-      const status = isAnnouncement ? 'active' : (category === 'promotion' ? 'pending_review' : 'active');
 
-      if (zoneId) {
-        let zone;
+      if (zoneId && !isAnnouncement) {
         try {
           const result = await pool.query('SELECT * FROM "Zone" WHERE id = $1 AND "eventId" = $2 AND "expiresAt" > NOW()', [zoneId, eventId]);
           zone = result.rows[0] || null;
@@ -1128,16 +1132,31 @@ async function startServer() {
         let hasJoined = false;
         try {
           const joined = await pool.query('SELECT 1 FROM "ZoneJoin" WHERE "zoneId" = $1 AND "userId" = $2', [zoneId, req.user.id]);
-          hasJoined = joined.rowCount > 0;
+          hasJoined = Boolean(joined.rowCount && joined.rowCount > 0);
         } catch {
           hasJoined = (await dbStore.zoneJoins.findMany({ where: { zoneId, userId: req.user.id } })).length > 0;
         }
         if (!hasJoined && membership?.lastKnownZoneId !== zoneId) {
           return res.status(403).json({ error: 'Join the zone or enable location while inside it before posting.' });
         }
-        const zoneExpiry = new Date(zone.expiresAt).getTime();
-        expiresAt = new Date(Math.min(new Date(expiresAt).getTime(), zoneExpiry)).toISOString();
+        ttlSeconds = zone.ttlSeconds || zone.ttl_seconds || 7200;
+      } else if (ttlMinutes) {
+        ttlSeconds = Math.max(60, Math.min(parseInt(ttlMinutes, 10) * 60, 604800));
       }
+
+      // Snapshot the TTL value used at creation time
+      const ttlSecondsSnapshot = ttlSeconds;
+
+      // Server-side expires_at computation (never trust client time)
+      let expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+      if (zone?.expiresAt) {
+        const zoneExpiry = new Date(zone.expiresAt).getTime();
+        if (zoneExpiry < new Date(expiresAt).getTime()) {
+          expiresAt = new Date(zoneExpiry).toISOString();
+        }
+      }
+
+      const status = isAnnouncement ? 'live' : (category === 'promotion' ? 'pending_review' : 'live');
 
       const newPost = await prisma.post.create({
         data: {
@@ -1151,12 +1170,33 @@ async function startServer() {
           approxLocation: approxLocation ? approxLocation.trim().slice(0, 100) : null,
           audience: audience || 'all',
           teamId,
-          zoneId: zoneId || null,
+          zoneId: isAnnouncement ? null : (zoneId || null),
           status,
           expiresAt,
+          ttlSecondsSnapshot,
           reportCount: 0
         }
       });
+
+      if (isAnnouncement) {
+        try {
+          const eventMemberships = await prisma.membership.findMany({ where: { eventId } });
+          for (const m of eventMemberships) {
+            await prisma.notification.create({
+              data: {
+                eventId,
+                userId: m.userId,
+                type: 'announcement',
+                title: `Announcement: ${newPost.title}`,
+                content: newPost.content.slice(0, 250),
+                isRead: false
+              }
+            });
+          }
+        } catch (notifErr) {
+          console.warn('Could not fan-out announcement notification:', notifErr);
+        }
+      }
 
       res.status(201).json(newPost);
     } catch (err: any) {
@@ -1198,6 +1238,73 @@ async function startServer() {
     try {
       const count = await prisma.post.cleanupExpired(req.params.eventId);
       res.json({ success: true, expiredCount: count });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Dedicated Zone Feed (status = "live" AND expires_at > now())
+  app.get(['/zones/:zoneId/feed', '/api/zones/:zoneId/feed', '/api/events/:eventId/zones/:zoneId/feed'], requireAuth, async (req, res) => {
+    try {
+      const { zoneId } = req.params;
+      const posts = await prisma.post.findMany({
+        where: {
+          zoneId,
+          status: 'live',
+          includeExpired: false
+        }
+      });
+      // Strict defense-in-depth: status must be live/active and not expired or held
+      const now = Date.now();
+      const livePosts = posts.filter((p: any) =>
+        (p.status === 'live' || p.status === 'active') &&
+        (!p.expiresAt || new Date(p.expiresAt).getTime() > now)
+      );
+      res.json(livePosts);
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Expiry Policy Transparency Endpoint
+  app.get(['/api/expiry-policy', '/api/events/:eventId/expiry-policy'], async (req, res) => {
+    try {
+      res.json({
+        policyName: 'DropZone Ephemeral Content Expiry & Transparency Policy',
+        version: '2026.1',
+        rule: 'expires_at is computed server-side at creation. Never trust client time.',
+        summary: 'DropZone posts expire based on their zone TTL. Expiry removes content from live feeds and purges primary stores, but does not guarantee cryptographic eradication across server logs, backups, or recipient devices.',
+        whatExpiryDoes: [
+          'Post vanishes from all zone and event feeds instantly when TTL passes.',
+          'Excluded from all client-facing API responses and feed queries.',
+          'Status is transitioned from live to expired by server-side cleanup jobs.',
+          'Primary content is hard-purged after a 24-hour retention grace period.',
+          'Audit actions are logged transparently to expiry_audit_log.'
+        ],
+        whatExpiryDoesNot: [
+          'Server access logs and HTTP proxy logs (retained temporarily for DDoS/security audit).',
+          'Point-in-time database disaster backups (cycled on routine backup schedules).',
+          'Recipient screenshots or local browser caching captured while the post was live.',
+          'Moderation/legal holds (reported content is retained until reviewed, even if TTL passes).'
+        ],
+        moderationOverride: {
+          rule: 'Reported content is retained until reviewed, even if its TTL passes.',
+          status: 'held',
+          description: 'Flagged posts transition to held status with paused expiry until reviewed by an organizer.'
+        }
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Expiry Audit Log Endpoint
+  app.get(['/api/expiry-audit-log', '/api/events/:eventId/expiry-audit-log'], requireAuth, async (req, res) => {
+    try {
+      const logs = await prisma.expiryAuditLog.findMany({ limit: 50 });
+      res.json(logs);
     } catch (err: any) {
       console.error(err);
       res.status(500).json({ error: err.message });
@@ -1328,9 +1435,22 @@ async function startServer() {
       });
 
       if (targetType === 'post') {
+        // Moderation Override: Reported content is placed on hold and retained until reviewed even if TTL passes
         await prisma.post.update({
           where: { id: targetId },
-          data: { reportCount: { increment: 1 } }
+          data: {
+            reportCount: { increment: 1 },
+            status: 'held',
+            heldUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+          }
+        }).catch(() => {});
+
+        await prisma.expiryAuditLog.create({
+          data: {
+            postId: targetId,
+            action: 'held',
+            reason: `Moderation Hold applied: reported for ${reason.trim().slice(0, 100)} (retained until reviewed)`
+          }
         }).catch(() => {});
       }
 
@@ -1359,11 +1479,27 @@ async function startServer() {
         data: { status }
       });
 
-      if (status === 'restricted' && report.targetType === 'post') {
-        await prisma.post.update({
-          where: { id: report.targetId },
-          data: { status: 'expired' }
-        }).catch(() => {});
+      if (report.targetType === 'post') {
+        if (status === 'restricted' || status === 'resolved') {
+          await prisma.post.update({
+            where: { id: report.targetId },
+            data: { status: 'removed', removedReason: 'Moderation review action' }
+          }).catch(() => {});
+
+          await prisma.expiryAuditLog.create({
+            data: {
+              postId: report.targetId,
+              action: 'purged',
+              reason: 'Post removed following moderator review'
+            }
+          }).catch(() => {});
+        } else if (status === 'dismissed') {
+          // Unhold post if report dismissed
+          await prisma.post.update({
+            where: { id: report.targetId },
+            data: { status: 'live', heldUntil: null }
+          }).catch(() => {});
+        }
       }
 
       res.json(report);
@@ -1438,9 +1574,25 @@ async function startServer() {
     console.log(`DropZone server running on port ${port} with secure mandatory authentication`);
   });
 
+  // Feature 4: Background Purge Job (Runs every 5 minutes)
+  const runBackgroundPurge = async () => {
+    try {
+      const expiredCount = await prisma.post.cleanupExpired();
+      if (expiredCount > 0) {
+        console.log(`[DropZone Background TTL Job] Cleared and marked ${expiredCount} expired posts.`);
+      }
+    } catch (err) {
+      console.warn('[DropZone Background TTL Job] Expiry cycle warning:', err);
+    }
+  };
+
+  const purgeJobInterval = setInterval(runBackgroundPurge, 5 * 60 * 1000);
+  setTimeout(runBackgroundPurge, 3000);
+
   // Graceful shutdown handling
   const shutdown = async () => {
     console.log('Initiating graceful shutdown...');
+    clearInterval(purgeJobInterval);
     server.close(async () => {
       try {
         await pool.end();

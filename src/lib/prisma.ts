@@ -379,12 +379,17 @@ export const prisma = {
           params.push(args.where.eventId);
         }
         if (args?.where?.status) {
-          sql += ` AND status = $${pIndex++}`;
-          params.push(args.where.status);
-          // By default, filter out expired posts for active queries unless explicitly bypassed
-          if (args.where.status === 'active' && !args.where.includeExpired) {
-            sql += ` AND ("expiresAt" IS NULL OR "expiresAt" > NOW())`;
+          if (args.where.status === 'active' || args.where.status === 'live') {
+            sql += ` AND status IN ('active', 'live')`;
+            if (!args.where.includeExpired) {
+              sql += ` AND ("expiresAt" IS NULL OR "expiresAt" > NOW())`;
+            }
+          } else {
+            sql += ` AND status = $${pIndex++}`;
+            params.push(args.where.status);
           }
+        } else if (!args?.where?.includeExpired) {
+          sql += ` AND status IN ('active', 'live') AND ("expiresAt" IS NULL OR "expiresAt" > NOW())`;
         }
         if (args?.where?.category) {
           sql += ` AND category = $${pIndex++}`;
@@ -444,8 +449,8 @@ export const prisma = {
           : (args.data.structuredData || null);
 
         const res = await query(
-          `INSERT INTO "Post" (id, "eventId", "authorId", "authorName", category, title, content, "structuredData", "approxLocation", audience, "teamId", "zoneId", status, "expiresAt", "reportCount", "createdAt", "updatedAt")
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 0, NOW(), NOW()) RETURNING *`,
+          `INSERT INTO "Post" (id, "eventId", "authorId", "authorName", category, title, content, "structuredData", "approxLocation", audience, "teamId", "zoneId", status, "expiresAt", "ttlSecondsSnapshot", "reportCount", "createdAt", "updatedAt")
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 0, NOW(), NOW()) RETURNING *`,
           [
             id,
             args.data.eventId,
@@ -459,8 +464,9 @@ export const prisma = {
             args.data.audience || 'all',
             args.data.teamId || null,
             args.data.zoneId || null,
-            args.data.status || 'active',
-            args.data.expiresAt
+            args.data.status || 'live',
+            args.data.expiresAt,
+            args.data.ttlSecondsSnapshot || null
           ]
         );
         return res.rows[0];
@@ -478,6 +484,14 @@ export const prisma = {
           updates.push(`status = $${pIndex++}`);
           params.push(args.data.status);
         }
+        if (args.data.heldUntil !== undefined) {
+          updates.push(`"heldUntil" = $${pIndex++}`);
+          params.push(args.data.heldUntil);
+        }
+        if (args.data.removedReason !== undefined) {
+          updates.push(`"removedReason" = $${pIndex++}`);
+          params.push(args.data.removedReason);
+        }
         if (args.data.reportCount?.increment) {
           updates.push('"reportCount" = "reportCount" + 1');
         }
@@ -491,7 +505,8 @@ export const prisma = {
     },
     async cleanupExpired(eventId?: string) {
       try {
-        let sql = 'UPDATE "Post" SET status = \'expired\', "updatedAt" = NOW() WHERE status = \'active\' AND "expiresAt" <= NOW()';
+        let sql = `UPDATE "Post" SET status = 'expired', "updatedAt" = NOW()
+                   WHERE status IN ('active', 'live') AND "expiresAt" <= NOW() AND (status IS NULL OR status != 'held')`;
         const params: any[] = [];
         if (eventId) {
           sql += ' AND "eventId" = $1';
@@ -500,7 +515,7 @@ export const prisma = {
         const res = await query(sql, params);
         return res.rowCount || 0;
       } catch (err) {
-        return 0;
+        return dbStore.posts.cleanupExpired(eventId);
       }
     }
   },
@@ -652,7 +667,30 @@ export const prisma = {
         const res = await query('UPDATE "Notification" SET "isRead" = $1 WHERE id = $2 RETURNING *', [args.data.isRead ?? true, args.where.id]);
         return res.rows[0];
       } catch (err) {
-        return null;
+        return dbStore.notifications.update(args);
+      }
+    }
+  },
+
+  expiryAuditLog: {
+    async findMany(args?: any) {
+      try {
+        const res = await query('SELECT * FROM "ExpiryAuditLog" ORDER BY "performedAt" DESC');
+        return res.rows;
+      } catch {
+        return dbStore.expiryAuditLogs.findMany(args);
+      }
+    },
+    async create(args: { data: any }) {
+      try {
+        const id = args.data.id || `audit-${Date.now()}`;
+        const res = await query(
+          'INSERT INTO "ExpiryAuditLog" (id, "postId", action, reason, "performedAt") VALUES ($1, $2, $3, $4, NOW()) RETURNING *',
+          [id, args.data.postId, args.data.action, args.data.reason || null]
+        );
+        return res.rows[0];
+      } catch {
+        return dbStore.expiryAuditLogs.create(args);
       }
     }
   }

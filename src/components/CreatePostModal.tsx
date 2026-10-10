@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { EventItem, Post, User } from '../types';
 import { createPost } from '../services/api';
-import { X, Plus, Megaphone, AlertCircle, Sparkles, MapPin, Send } from 'lucide-react';
+import { X, Plus, Megaphone, AlertCircle, Sparkles, MapPin, Send, Info, ExternalLink } from 'lucide-react';
 
 interface CreatePostModalProps {
   isOpen: boolean;
@@ -11,6 +11,7 @@ interface CreatePostModalProps {
   zoneId?: string | null;
   allowedPostTypes?: Post['category'][];
   onPostCreated: () => void;
+  onNavigateToPolicy?: () => void;
 }
 
 export const CreatePostModal: React.FC<CreatePostModalProps> = ({
@@ -20,7 +21,8 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   currentUser,
   zoneId,
   allowedPostTypes,
-  onPostCreated
+  onPostCreated,
+  onNavigateToPolicy
 }) => {
   const [category, setCategory] = useState<'lost_found' | 'requirement' | 'announcement' | 'qa' | 'promotion'>('requirement');
   const [title, setTitle] = useState('');
@@ -37,6 +39,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   const [ttlMinutes, setTtlMinutes] = useState<number>(currentEvent?.defaultTtlMinutes || 1440);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const isStaff = currentUser.role === 'organizer' || currentUser.role === 'moderator' || currentEvent?.ownerId === currentUser.id;
   const postTypes: { id: Post['category']; label: string }[] = [
     { id: 'requirement', label: 'Hardware / Assistance Needed' },
     { id: 'lost_found', label: 'Lost & Found Item' },
@@ -45,8 +48,8 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
     { id: 'promotion', label: 'Sponsored Partner / Vendor (reviewed)' }
   ];
   const visiblePostTypes = postTypes.filter(type =>
-    (type.id !== 'announcement' || currentUser.role === 'organizer') &&
-    (!zoneId || !allowedPostTypes || allowedPostTypes.includes(type.id))
+    (type.id !== 'announcement' || isStaff) &&
+    (type.id === 'announcement' || !zoneId || !allowedPostTypes || allowedPostTypes.includes(type.id))
   );
 
   useEffect(() => {
@@ -60,7 +63,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !content.trim()) return;
-    if (zoneId && allowedPostTypes && !allowedPostTypes.includes(category)) {
+    if (category !== 'announcement' && zoneId && allowedPostTypes && !allowedPostTypes.includes(category)) {
       setErrorMessage('This post type is not allowed in the selected zone.');
       return;
     }
@@ -79,7 +82,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
         authorId: currentUser.id,
         authorName: currentUser.name,
         category,
-        zoneId: zoneId ?? null,
+        zoneId: category === 'announcement' ? null : (zoneId ?? null),
         title: title.trim(),
         content: content.trim(),
         structuredData,
@@ -131,9 +134,9 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
             </select>
           </div>
 
-          {category === 'announcement' && currentUser.role !== 'organizer' && (
+          {category === 'announcement' && !isStaff && (
             <div className="p-3 bg-amber-50 text-amber-800 text-xs rounded-lg border border-amber-200">
-              Note: Only authorized event organizers can publish official announcements.
+              Note: Only authorized event organizers and staff can publish official announcements.
             </div>
           )}
 
@@ -254,6 +257,29 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                 <option value={1440}>24 Hours (Default)</option>
                 <option value={2880}>48 Hours</option>
               </select>
+            </div>
+          </div>
+
+          {/* Pre-Post Expiry Notice */}
+          <div className="p-3 rounded-xl bg-amber-50/90 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5">
+            <Info className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="leading-relaxed">
+                Your post will disappear from the feed in {ttlMinutes >= 60 ? `${Math.round(ttlMinutes / 60)}h` : `${ttlMinutes}m`}. It may remain in server logs, backups, and screenshots. <strong>Expiry is not deletion.</strong>
+              </p>
+              {onNavigateToPolicy && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onNavigateToPolicy();
+                  }}
+                  className="font-bold text-blue-700 hover:text-blue-900 underline inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Learn more</span>
+                  <ExternalLink className="w-3 h-3" />
+                </button>
+              )}
             </div>
           </div>
 
