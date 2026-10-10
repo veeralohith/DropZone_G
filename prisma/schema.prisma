@@ -1,0 +1,154 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id @default(uuid())
+  authUserId    String?        @unique
+  name          String
+  email         String         @unique
+  passwordHash  String?
+  role          String         @default("participant") // participant | organizer | moderator
+  avatar        String?
+  memberships   Membership[]
+  notifications Notification[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Event {
+  id               String         @id @default(uuid())
+  name             String
+  description      String
+  eventType        String         @default("hybrid") // physical | remote | hybrid
+  startDate        DateTime
+  endDate          DateTime
+  timezone         String         @default("Asia/Kolkata")
+  accessMode       String         @default("csv_verified") // open | invite_only | csv_verified
+  zoneConfig       Json?          // { enabled, radiusMeters, centerName, latitude, longitude }
+  teamPolicy       String         @default("optional") // none | optional | mandatory
+  defaultTtlMinutes Int           @default(1440)
+  ownerId          String
+  status           String         @default("active") // active | archived
+  memberships      Membership[]
+  teams            Team[]
+  posts            Post[]
+  messages         Message[]
+  reports          Report[]
+  notifications    Notification[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+}
+
+model Membership {
+  id             String   @id @default(uuid())
+  eventId        String
+  event          Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  registrationId String?
+  teamId         String?
+  team           Team?    @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  role           String   @default("participant") // participant | organizer | moderator | owner
+  status         String   @default("active") // active | pending | suspended
+  zoneState      String   @default("demo_zone") // checking | eligible | outside_zone | permission_denied | demo_zone
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
+}
+
+model Team {
+  id          String       @id @default(uuid())
+  eventId     String
+  event       Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name        String
+  code        String
+  memberships Membership[]
+  posts       Post[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([eventId])
+}
+
+model Post {
+  id             String   @id @default(uuid())
+  eventId        String
+  event          Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  authorId       String
+  authorName     String
+  category       String   // lost_found | requirement | announcement | qa | promotion
+  title          String
+  content        String
+  structuredData Json?    // itemType, itemName, reqType, neededBy, priority, etc.
+  approxLocation String?
+  audience       String   @default("all") // all | team | organizers
+  teamId         String?
+  team           Team?    @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  status         String   @default("active") // active | resolved | expired | pending_review
+  expiresAt      DateTime
+  reportCount    Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([eventId])
+  @@index([category])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model Message {
+  id            String   @id @default(uuid())
+  eventId       String
+  event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  senderId      String
+  senderName    String
+  recipientType String   // all | team | individual | support
+  recipientId   String?
+  content       String
+  createdAt     DateTime @default(now())
+
+  @@index([eventId])
+}
+
+model Report {
+  id            String   @id @default(uuid())
+  eventId       String
+  event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  targetType    String   // post | message | user
+  targetId      String
+  targetSummary String
+  reporterId    String
+  reporterName  String
+  reason        String
+  details       String?
+  status        String   @default("pending") // pending | dismissed | resolved | restricted
+  createdAt     DateTime @default(now())
+
+  @@index([eventId])
+  @@index([status])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // zone_verified | announcement | team_assigned | alert
+  title     String
+  content   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([eventId])
+  @@index([userId])
+}
