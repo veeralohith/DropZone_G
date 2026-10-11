@@ -41,6 +41,13 @@ export function useGeofence({ eventId, zones, onZoneEnter, onZoneExit }: UseGeof
   }, []);
 
   useEffect(() => {
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'geolocation' as PermissionName }).then(permissionStatus => {
+        if (permissionStatus.state === 'granted') {
+          requestLocation();
+        }
+      }).catch(() => {});
+    }
     return () => {
       if (watchIdRef.current !== null && navigator.geolocation) {
         navigator.geolocation.clearWatch(watchIdRef.current);
@@ -118,7 +125,7 @@ export function useGeofence({ eventId, zones, onZoneEnter, onZoneExit }: UseGeof
           ? 'Location permission was denied. You can choose a zone manually.'
           : 'Could not read a location fix. Choose a zone manually or try again.');
       },
-      { enableHighAccuracy: false, maximumAge: 30000, timeout: 20000 }
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
     );
   }, []);
 

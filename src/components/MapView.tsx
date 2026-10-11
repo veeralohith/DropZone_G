@@ -101,10 +101,32 @@ export function MapView({
     const map = L.map(containerRef.current, { zoomControl: false, attributionControl: true }).setView(defaultCenter || VISAKHAPATNAM_CENTER, DEFAULT_ZOOM);
     mapRef.current = map;
     L.control.zoom({ position: 'bottomright' }).addTo(map);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+
+    const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+    });
+
+    const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
+      attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+    });
+
+    const labelsLayer = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
+      attribution: ''
+    });
+
+    const satelliteWithLabels = L.layerGroup([satelliteLayer, labelsLayer]);
+
+    // Default to Satellite view
+    satelliteWithLabels.addTo(map);
+
+    L.control.layers({
+      '🛰️ Satellite View': satelliteWithLabels,
+      '🗺️ Street Map': streetLayer
+    }, undefined, { position: 'topright' }).addTo(map);
+
     layersRef.current.addTo(map);
     drawingLayersRef.current.addTo(map);
 
@@ -233,18 +255,20 @@ export function MapView({
     const location = L.latLng(position.latitude, position.longitude);
     if (!userMarkerRef.current) {
       userMarkerRef.current = L.circleMarker(location, {
-        radius: 7,
+        radius: 8,
         color: '#ffffff',
         weight: 3,
-        fillColor: position.simulated ? '#c2410c' : '#0f766e',
+        fillColor: position.simulated ? '#ea580c' : '#2563eb',
         fillOpacity: 1
       }).addTo(map);
+      userMarkerRef.current.bindPopup(`<strong>Your Location</strong><br/>Accuracy: ~${Math.round(position.accuracy)}m${position.simulated ? ' (Simulated)' : ''}`);
     } else {
       userMarkerRef.current.setLatLng(location);
-      userMarkerRef.current.setStyle({ fillColor: position.simulated ? '#c2410c' : '#0f766e' });
+      userMarkerRef.current.setStyle({ fillColor: position.simulated ? '#ea580c' : '#2563eb' });
+      userMarkerRef.current.setPopupContent(`<strong>Your Location</strong><br/>Accuracy: ~${Math.round(position.accuracy)}m${position.simulated ? ' (Simulated)' : ''}`);
     }
     if (!hasCenteredOnLocationRef.current || position.simulated) {
-      map.setView(location, Math.max(map.getZoom(), 15), { animate: true });
+      map.setView(location, Math.max(map.getZoom(), 16), { animate: true });
       hasCenteredOnLocationRef.current = true;
     }
   }, [position, currentZone, isActive]);

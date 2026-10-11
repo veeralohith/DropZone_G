@@ -5,7 +5,6 @@ import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { prisma, pool } from './src/lib/prisma.js';
-import { dbStore } from './src/lib/db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const AUTH_SECRET = process.env.AUTH_SECRET || 'dropzone_production_auth_secret_key_2026_samartha';
@@ -103,90 +102,13 @@ function sanitizeUser(user: any) {
   return clean;
 }
 
-async function seedDevelopmentDemoAccounts() {
-  if (process.env.NODE_ENV === 'production') return;
-
+async function verifySupabaseConnection() {
   try {
-    await pool.query('SELECT 1');
-    return;
-  } catch {
-    console.warn('PostgreSQL is unavailable; preparing local development demo accounts.');
-  }
-
-  const passwordHash = hashPassword('DropZone@2026');
-  const demoAccounts = [
-    { id: 'usr-1', name: 'Aarav Sharma', email: 'aarav@hackathon.samartha.org', role: 'participant', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100' },
-    { id: 'usr-2', name: 'Dr. Priya Nair', email: 'priya.organizer@hackathon.samartha.org', role: 'organizer', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100' },
-    { id: 'usr-3', name: 'Vikram Mehta (Mod)', email: 'vikram.mod@hackathon.samartha.org', role: 'moderator', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100' },
-    { id: 'usr-4', name: 'Ananya Roy', email: 'ananya@hackathon.samartha.org', role: 'participant', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100' }
-  ];
-
-  for (const account of demoAccounts) {
-    await dbStore.users.upsert({
-      where: { email: account.email },
-      update: { ...account, passwordHash },
-      create: { ...account, passwordHash }
-    });
-  }
-
-  const eventId = 'evt-samartha-2026';
-  const existingEvent = await dbStore.events.findUnique({ where: { id: eventId } });
-  if (!existingEvent) {
-    await dbStore.events.create({
-      data: {
-        id: eventId,
-        name: 'SAMARTHA National Hackathon 2026',
-        description: 'Zone-based collaboration for SAMARTHA National Hackathon in Visakhapatnam, Andhra Pradesh.',
-        eventType: 'hybrid',
-        startDate: '2026-10-15T09:00:00.000Z',
-        endDate: '2026-10-17T18:00:00.000Z',
-        timezone: 'Asia/Kolkata',
-        accessMode: 'csv_verified',
-        zoneConfig: {
-          enabled: true,
-          radiusMeters: 500,
-          centerName: 'SAMARTHA Hackathon, Visakhapatnam',
-          latitude: 17.6868,
-          longitude: 83.2185
-        },
-        teamPolicy: 'optional',
-        defaultTtlMinutes: 1440,
-        ownerId: 'usr-2',
-        status: 'active'
-      }
-    });
-  } else {
-    await dbStore.events.update({
-      where: { id: eventId },
-      data: {
-        description: 'Zone-based collaboration for SAMARTHA National Hackathon in Visakhapatnam, Andhra Pradesh.',
-        zoneConfig: {
-          enabled: true,
-          radiusMeters: 500,
-          centerName: 'SAMARTHA Hackathon, Visakhapatnam',
-          latitude: 17.6868,
-          longitude: 83.2185
-        }
-      }
-    });
-  }
-
-  const demoMemberships = [
-    { id: 'mem-1', userId: 'usr-1', registrationId: 'SM-2026-001', role: 'participant', zoneState: 'demo_zone' },
-    { id: 'mem-2', userId: 'usr-2', registrationId: 'SM-2026-ORG', role: 'organizer', zoneState: 'eligible' },
-    { id: 'mem-3', userId: 'usr-3', registrationId: 'SM-2026-MOD', role: 'moderator', zoneState: 'eligible' },
-    { id: 'mem-4', userId: 'usr-4', registrationId: 'SM-2026-002', role: 'participant', zoneState: 'demo_zone' }
-  ];
-
-  for (const membership of demoMemberships) {
-    const existingMembership = await dbStore.memberships.findUnique({
-      where: { eventId_userId: { eventId, userId: membership.userId } }
-    });
-    if (!existingMembership) {
-      await dbStore.memberships.create({
-        data: { ...membership, eventId, status: 'active' }
-      });
-    }
+    const res = await pool.query('SELECT 1');
+    console.log('✓ Successfully connected to Supabase PostgreSQL database.');
+  } catch (err: any) {
+    console.error('✗ Failed to connect to Supabase PostgreSQL:', err.message);
+    throw new Error(`Database connection failed: ${err.message}. DropZone is configured to work only with Supabase.`);
   }
 }
 
@@ -398,7 +320,7 @@ export async function requireEventModerator(req: AuthenticatedRequest, res: Resp
 }
 
 async function startServer() {
-  await seedDevelopmentDemoAccounts();
+  await verifySupabaseConnection();
 
   const app = express();
   app.use(express.json({ limit: '2mb' }));
@@ -868,21 +790,9 @@ async function startServer() {
         [eventId, req.user.id]
       );
       return res.json(result.rows.map((zone: any) => ({ ...parseZoneJson(zone), memberCount: Number(zone.memberCount), joined: Boolean(zone.joined) })));
-    } catch {
-      try {
-        await dbStore.zones.cleanupExpired();
-        const zones = await dbStore.zones.findMany({ where: { eventId: req.params.eventId } });
-        const currentUserJoins = await dbStore.zoneJoins.findMany({ where: { eventId: req.params.eventId, userId: req.user.id } });
-        const joinedIds = new Set(currentUserJoins.map((join: any) => join.zoneId));
-        const enriched = await Promise.all(zones.map(async (zone: any) => ({
-          ...parseZoneJson(zone),
-          memberCount: (await dbStore.zoneJoins.findMany({ where: { zoneId: zone.id } })).length,
-          joined: joinedIds.has(zone.id)
-        })));
-        return res.json(enriched);
-      } catch {
-        return res.status(500).json({ error: 'Could not load event zones.' });
-      }
+    } catch (err: any) {
+      console.error('Zone list error:', err);
+      return res.status(500).json({ error: 'Could not load event zones from database.' });
     }
   });
 
@@ -922,17 +832,12 @@ async function startServer() {
         createdBy: req.user.id,
         expiresAt: new Date(Date.now() + Number(ttlSeconds) * 1000).toISOString()
       };
-      let zone;
-      try {
-        const result = await pool.query(
-          `INSERT INTO "Zone" (id, "eventId", name, description, geometry, "radiusMeters", "ttlSeconds", "allowedPostTypes", "createdBy", "expiresAt")
-           VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8::jsonb, $9, $10) RETURNING *`,
-          [data.id, data.eventId, data.name, data.description, JSON.stringify(data.geometry), data.radiusMeters, data.ttlSeconds, JSON.stringify(data.allowedPostTypes), data.createdBy, data.expiresAt]
-        );
-        zone = result.rows[0];
-      } catch {
-        zone = await dbStore.zones.create({ data });
-      }
+      const result = await pool.query(
+        `INSERT INTO "Zone" (id, "eventId", name, description, geometry, "radiusMeters", "ttlSeconds", "allowedPostTypes", "createdBy", "expiresAt")
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8::jsonb, $9, $10) RETURNING *`,
+        [data.id, data.eventId, data.name, data.description, JSON.stringify(data.geometry), data.radiusMeters, data.ttlSeconds, JSON.stringify(data.allowedPostTypes), data.createdBy, data.expiresAt]
+      );
+      const zone = result.rows[0];
       return res.status(201).json({ ...parseZoneJson(zone), memberCount: 0, joined: false });
     } catch (err: any) {
       console.error('Zone creation error:', err);
@@ -943,31 +848,20 @@ async function startServer() {
   app.post('/api/events/:eventId/zones/:zoneId/join', requireAuth, rateLimiter(40), async (req: AuthenticatedRequest, res) => {
     try {
       const { eventId, zoneId } = req.params;
-      let zone;
-      try {
-        const result = await pool.query('SELECT * FROM "Zone" WHERE id = $1 AND "eventId" = $2 AND "expiresAt" > NOW()', [zoneId, eventId]);
-        zone = result.rows[0] || null;
-      } catch {
-        zone = await dbStore.zones.findUnique({ where: { id: zoneId } });
-        if (zone?.eventId !== eventId || new Date(zone.expiresAt).getTime() <= Date.now()) zone = null;
-      }
+      const result = await pool.query('SELECT * FROM "Zone" WHERE id = $1 AND "eventId" = $2 AND "expiresAt" > NOW()', [zoneId, eventId]);
+      const zone = result.rows[0] || null;
       if (!zone) return res.status(404).json({ error: 'This zone is no longer active.' });
 
-      let joinedAt: string;
-      try {
-        const result = await pool.query(
-          `INSERT INTO "ZoneJoin" ("zoneId", "userId", "eventId") VALUES ($1, $2, $3)
-           ON CONFLICT ("zoneId", "userId") DO UPDATE SET "zoneId" = EXCLUDED."zoneId" RETURNING "joinedAt"`,
-          [zoneId, req.user.id, eventId]
-        );
-        joinedAt = result.rows[0].joinedAt;
-      } catch {
-        const join = await dbStore.zoneJoins.upsert({
-          where: { zoneId_userId: { zoneId, userId: req.user.id } },
-          create: { zoneId, userId: req.user.id, eventId }
-        });
-        joinedAt = join.joinedAt;
-      }
+      const joinResult = await pool.query(
+        `INSERT INTO "ZoneJoin" ("zoneId", "userId", "eventId") VALUES ($1, $2, $3)
+         ON CONFLICT ("zoneId", "userId") DO UPDATE SET "zoneId" = EXCLUDED."zoneId" RETURNING "joinedAt"`,
+        [zoneId, req.user.id, eventId]
+      );
+      const joinedAt = joinResult.rows[0].joinedAt;
+      await pool.query(
+        `UPDATE "Membership" SET "lastKnownZoneId" = $1, "zoneState" = 'eligible' WHERE "eventId" = $2 AND "userId" = $3`,
+        [zoneId, eventId, req.user.id]
+      );
       return res.json({ success: true, joinedAt });
     } catch (err: any) {
       console.error('Zone join error:', err);
@@ -978,11 +872,7 @@ async function startServer() {
   app.delete('/api/events/:eventId/zones/:zoneId/join', requireAuth, rateLimiter(40), async (req: AuthenticatedRequest, res) => {
     try {
       const { eventId, zoneId } = req.params;
-      try {
-        await pool.query('DELETE FROM "ZoneJoin" WHERE "zoneId" = $1 AND "userId" = $2 AND "eventId" = $3', [zoneId, req.user.id, eventId]);
-      } catch {
-        await dbStore.zoneJoins.delete({ where: { zoneId_userId: { zoneId, userId: req.user.id } } });
-      }
+      await pool.query('DELETE FROM "ZoneJoin" WHERE "zoneId" = $1 AND "userId" = $2 AND "eventId" = $3', [zoneId, req.user.id, eventId]);
       const membership = await prisma.membership.findUnique({
         where: { eventId_userId: { eventId, userId: req.user.id } }
       });
@@ -1004,14 +894,8 @@ async function startServer() {
       }
       const coarseLatitude = Math.round(latitude * 1000) / 1000;
       const coarseLongitude = Math.round(longitude * 1000) / 1000;
-      let zones: any[];
-      try {
-        const result = await pool.query('SELECT * FROM "Zone" WHERE "eventId" = $1 AND "expiresAt" > NOW()', [req.params.eventId]);
-        zones = result.rows;
-      } catch {
-        zones = (await dbStore.zones.findMany({ where: { eventId: req.params.eventId } }))
-          .filter((zone: any) => new Date(zone.expiresAt).getTime() > Date.now());
-      }
+      const result = await pool.query('SELECT * FROM "Zone" WHERE "eventId" = $1 AND "expiresAt" > NOW()', [req.params.eventId]);
+      const zones = result.rows;
       const activeZone = zones.find(zone => pointInZone(coarseLongitude, coarseLatitude, zone));
       const simulatedInDevelopment = process.env.NODE_ENV !== 'production' && simulated === true;
 
@@ -1022,6 +906,18 @@ async function startServer() {
         await prisma.membership.update({
           where: { id: membership.id },
           data: { lastKnownZoneId: activeZone?.id || null, zoneState: activeZone ? 'eligible' : 'outside_zone' }
+        });
+      } else {
+        await prisma.membership.create({
+          data: {
+            eventId: req.params.eventId,
+            userId: req.user.id,
+            registrationId: `REG-${Math.floor(1000 + Math.random() * 9000)}`,
+            role: req.user.role || 'participant',
+            status: 'active',
+            lastKnownZoneId: activeZone?.id || null,
+            zoneState: activeZone ? 'eligible' : 'outside_zone'
+          }
         });
       }
       return res.json({
@@ -1114,28 +1010,30 @@ async function startServer() {
       const isAnnouncement = category === 'announcement';
 
       if (zoneId && !isAnnouncement) {
-        try {
-          const result = await pool.query('SELECT * FROM "Zone" WHERE id = $1 AND "eventId" = $2 AND "expiresAt" > NOW()', [zoneId, eventId]);
-          zone = result.rows[0] || null;
-        } catch {
-          zone = await dbStore.zones.findUnique({ where: { id: zoneId } });
-          if (zone?.eventId !== eventId || new Date(zone.expiresAt).getTime() <= Date.now()) zone = null;
-        }
+        const result = await pool.query('SELECT * FROM "Zone" WHERE id = $1 AND "eventId" = $2 AND "expiresAt" > NOW()', [zoneId, eventId]);
+        zone = result.rows[0] || null;
         if (!zone) return res.status(400).json({ error: 'This zone has expired or is unavailable.' });
         const parsedZone = parseZoneJson(zone);
         if (!parsedZone.allowedPostTypes.includes(category)) {
           return res.status(400).json({ error: 'This post type is not allowed in the selected zone.' });
         }
-        const membership = await prisma.membership.findUnique({
+        let membership = await prisma.membership.findUnique({
           where: { eventId_userId: { eventId, userId: req.user.id } }
         });
-        let hasJoined = false;
-        try {
-          const joined = await pool.query('SELECT 1 FROM "ZoneJoin" WHERE "zoneId" = $1 AND "userId" = $2', [zoneId, req.user.id]);
-          hasJoined = Boolean(joined.rowCount && joined.rowCount > 0);
-        } catch {
-          hasJoined = (await dbStore.zoneJoins.findMany({ where: { zoneId, userId: req.user.id } })).length > 0;
+        if (!membership) {
+          membership = await prisma.membership.create({
+            data: {
+              eventId,
+              userId: req.user.id,
+              registrationId: `REG-${Math.floor(1000 + Math.random() * 9000)}`,
+              role: req.user.role || 'participant',
+              status: 'active',
+              zoneState: 'eligible'
+            }
+          });
         }
+        const joined = await pool.query('SELECT 1 FROM "ZoneJoin" WHERE "zoneId" = $1 AND "userId" = $2', [zoneId, req.user.id]);
+        const hasJoined = Boolean(joined.rowCount && joined.rowCount > 0);
         if (!hasJoined && membership?.lastKnownZoneId !== zoneId) {
           return res.status(403).json({ error: 'Join the zone or enable location while inside it before posting.' });
         }

@@ -1,7 +1,6 @@
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
 import pg from 'pg';
-import { dbStore } from './db.js';
 
 const { Pool } = pg;
 
@@ -9,7 +8,8 @@ export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 10,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000
+  connectionTimeoutMillis: 10000,
+  ssl: { rejectUnauthorized: false }
 });
 
 pool.on('error', (err) => {
@@ -45,8 +45,7 @@ export const prisma = {
         const res = await query('SELECT * FROM "User" ORDER BY "createdAt" ASC');
         return res.rows;
       } catch (err) {
-        console.warn('Postgres query fallback to dbStore for user.findMany');
-        return dbStore.users.findMany();
+        throw err;
       }
     },
     async findUnique(args: { where: { id?: string; email?: string; authUserId?: string } }) {
@@ -65,7 +64,7 @@ export const prisma = {
         }
         return null;
       } catch (err) {
-        return dbStore.users.findUnique(args);
+        throw err;
       }
     },
     async findFirst() {
@@ -73,7 +72,7 @@ export const prisma = {
         const res = await query('SELECT * FROM "User" ORDER BY "createdAt" ASC LIMIT 1');
         return res.rows[0] || null;
       } catch (err) {
-        return dbStore.users.findFirst();
+        throw err;
       }
     },
     async create(args: { data: any }) {
@@ -86,7 +85,7 @@ export const prisma = {
         );
         return res.rows[0];
       } catch (err) {
-        return dbStore.users.create(args);
+        throw err;
       }
     },
     async update(args: { where: { id?: string; authUserId?: string }; data: any }) {
@@ -130,7 +129,7 @@ export const prisma = {
         if (existing) return existing;
         return await this.create({ data: args.create });
       } catch (err) {
-        return dbStore.users.upsert(args);
+        throw err;
       }
     }
   },
@@ -141,7 +140,7 @@ export const prisma = {
         const res = await query('SELECT * FROM "Event" ORDER BY "createdAt" DESC');
         return res.rows;
       } catch (err) {
-        return dbStore.events.findMany(args);
+        throw err;
       }
     },
     async findUnique(args: { where: { id: string } }) {
@@ -149,7 +148,7 @@ export const prisma = {
         const res = await query('SELECT * FROM "Event" WHERE id = $1 LIMIT 1', [args.where.id]);
         return res.rows[0] || null;
       } catch (err) {
-        return dbStore.events.findUnique(args);
+        throw err;
       }
     },
     async create(args: { data: any }) {
@@ -176,7 +175,7 @@ export const prisma = {
         );
         return res.rows[0];
       } catch (err) {
-        return dbStore.events.create(args);
+        throw err;
       }
     }
   },
@@ -211,7 +210,7 @@ export const prisma = {
         const res = await query(sql, params);
         return res.rows;
       } catch (err) {
-        return dbStore.memberships.findMany(args);
+        throw err;
       }
     },
     async findUnique(args: { where: { eventId_userId?: { eventId: string; userId: string }; id?: string }; include?: any }) {
@@ -236,7 +235,7 @@ export const prisma = {
         }
         return null;
       } catch (err) {
-        return dbStore.memberships.findUnique(args);
+        throw err;
       }
     },
     async create(args: { data: any; include?: any }) {
@@ -261,7 +260,7 @@ export const prisma = {
         }
         return res.rows[0];
       } catch (err) {
-        return dbStore.memberships.create(args);
+        throw err;
       }
     },
     async update(args: { where: { id: string }; data: any; include?: any }) {
@@ -299,7 +298,7 @@ export const prisma = {
         const res = await query('SELECT * FROM "Membership" WHERE id = $1', [args.where.id]);
         return res.rows[0];
       } catch (err) {
-        return dbStore.memberships.update(args);
+        throw err;
       }
     }
   },
@@ -317,7 +316,7 @@ export const prisma = {
         const res = await query(sql, params);
         return res.rows;
       } catch (err) {
-        return dbStore.teams.findMany(args);
+        throw err;
       }
     },
     async findFirst(args: { where: { eventId?: string; name?: any; id?: string } }) {
@@ -341,7 +340,7 @@ export const prisma = {
         const res = await query(sql, params);
         return res.rows[0] || null;
       } catch (err) {
-        return dbStore.teams.findFirst(args);
+        throw err;
       }
     },
     async create(args: { data: any }) {
@@ -353,7 +352,7 @@ export const prisma = {
         );
         return res.rows[0];
       } catch (err) {
-        return dbStore.teams.create(args);
+        throw err;
       }
     },
     async upsert(args: { where: { id: string }; create: any }) {
@@ -362,7 +361,7 @@ export const prisma = {
         if (existing.rows[0]) return existing.rows[0];
         return await this.create({ data: args.create });
       } catch (err) {
-        return dbStore.teams.upsert(args);
+        throw err;
       }
     }
   },
@@ -430,7 +429,7 @@ export const prisma = {
         const res = await query(sql, params);
         return res.rows;
       } catch (err) {
-        return dbStore.posts.findMany(args);
+        throw err;
       }
     },
     async findUnique(args: { where: { id: string } }) {
@@ -438,7 +437,7 @@ export const prisma = {
         const res = await query('SELECT * FROM "Post" WHERE id = $1 LIMIT 1', [args.where.id]);
         return res.rows[0] || null;
       } catch (err) {
-        return dbStore.posts.findUnique(args);
+        throw err;
       }
     },
     async create(args: { data: any }) {
@@ -471,7 +470,7 @@ export const prisma = {
         );
         return res.rows[0];
       } catch (err) {
-        return dbStore.posts.create(args);
+        throw err;
       }
     },
     async update(args: { where: { id: string }; data: any }) {
@@ -500,7 +499,7 @@ export const prisma = {
         const res = await query(sql, params);
         return res.rows[0];
       } catch (err) {
-        return dbStore.posts.update(args);
+        throw err;
       }
     },
     async cleanupExpired(eventId?: string) {
@@ -515,7 +514,7 @@ export const prisma = {
         const res = await query(sql, params);
         return res.rowCount || 0;
       } catch (err) {
-        return dbStore.posts.cleanupExpired(eventId);
+        throw err;
       }
     }
   },
@@ -552,7 +551,7 @@ export const prisma = {
         const res = await query(sql, params);
         return res.rows;
       } catch (err) {
-        return dbStore.messages.findMany(args);
+        throw err;
       }
     },
     async create(args: { data: any }) {
@@ -564,7 +563,7 @@ export const prisma = {
         );
         return res.rows[0];
       } catch (err) {
-        return dbStore.messages.create(args);
+        throw err;
       }
     }
   },
@@ -582,7 +581,7 @@ export const prisma = {
         const res = await query(sql, params);
         return res.rows;
       } catch (err) {
-        return dbStore.reports.findMany(args);
+        throw err;
       }
     },
     async create(args: { data: any }) {
@@ -606,7 +605,7 @@ export const prisma = {
         );
         return res.rows[0];
       } catch (err) {
-        return dbStore.reports.create(args);
+        throw err;
       }
     },
     async update(args: { where: { id: string }; data: any }) {
@@ -624,7 +623,7 @@ export const prisma = {
         const res = await query(sql, params);
         return res.rows[0];
       } catch (err) {
-        return dbStore.reports.update(args);
+        throw err;
       }
     }
   },
@@ -647,7 +646,7 @@ export const prisma = {
         const res = await query(sql, params);
         return res.rows;
       } catch (err) {
-        return dbStore.notifications.findMany(args);
+        throw err;
       }
     },
     async create(args: { data: any }) {
@@ -659,7 +658,7 @@ export const prisma = {
         );
         return res.rows[0];
       } catch (err) {
-        return dbStore.notifications.create(args);
+        throw err;
       }
     },
     async update(args: { where: { id: string }; data: { isRead?: boolean } }) {
@@ -667,7 +666,7 @@ export const prisma = {
         const res = await query('UPDATE "Notification" SET "isRead" = $1 WHERE id = $2 RETURNING *', [args.data.isRead ?? true, args.where.id]);
         return res.rows[0];
       } catch (err) {
-        return dbStore.notifications.update(args);
+        throw err;
       }
     }
   },
@@ -677,8 +676,8 @@ export const prisma = {
       try {
         const res = await query('SELECT * FROM "ExpiryAuditLog" ORDER BY "performedAt" DESC');
         return res.rows;
-      } catch {
-        return dbStore.expiryAuditLogs.findMany(args);
+      } catch (err) {
+        throw err;
       }
     },
     async create(args: { data: any }) {
@@ -689,8 +688,8 @@ export const prisma = {
           [id, args.data.postId, args.data.action, args.data.reason || null]
         );
         return res.rows[0];
-      } catch {
-        return dbStore.expiryAuditLogs.create(args);
+      } catch (err) {
+        throw err;
       }
     }
   }
